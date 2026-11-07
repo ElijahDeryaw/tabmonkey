@@ -367,12 +367,13 @@ function drawMapProgress() {
   });
 }
 
-let holdTimer = null, held = false;
+let holdTimer = null, held = false, holdX = 0, holdY = 0;
 $('map').addEventListener('pointerdown', (e) => {
   const c = e.target.closest('.sec'); if (!c) return;
-  held = false;
+  held = false; holdX = e.clientX; holdY = e.clientY;
   holdTimer = setTimeout(() => { held = true; navigator.vibrate?.(10); loopSection(Number(c.dataset.i)); }, 450);
 });
+$('map').addEventListener('pointermove', (e) => { if (Math.hypot(e.clientX - holdX, e.clientY - holdY) > 8) clearTimeout(holdTimer); });
 ['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) => $('map').addEventListener(ev, () => clearTimeout(holdTimer)));
 $('map').addEventListener('click', (e) => {
   const c = e.target.closest('.sec'); if (!c || held) return;
@@ -577,7 +578,8 @@ function rerender(draw = () => player.render(scoreTracks(), yourView())) {
 // ---------- retune: song key (per song) + how your instrument is tuned (per player, persists across songs)
 const songShift = () => (app.songId ? store.song(app.songId).shift ?? 0 : 0);
 const tuningChoice = () => store.pref(`tuning:${roleOfMain()}`, null); // null = tuned like the tab
-const allowCapo = () => store.pref('allowCapo', true);
+// Default: re-finger to real frets. A capo is only added on request (moving a capo the tab already uses is automatic).
+const allowCapo = () => store.pref('allowCapo', false);
 const isStringed = (t) => t && !t.staves[0]?.isPercussion && t.staves[0]?.tuning?.length;
 app.retuneStats = null;
 
@@ -600,7 +602,9 @@ function applyRetune({ render = true } = {}) {
   app.retuneStats = stats;
   app.retuned = mine;
   $('t-retune').setAttribute('aria-pressed', String(!!(k || choice)));
-  $('t-retune').textContent = k ? `Retune ${k > 0 ? '+' : '−'}${Math.abs(k)}` : 'Retune';
+  // e.g. "Retune · D std · −2"
+  const short = choice ? (retune.tuningOptions(role, (api.score.tracks[[...mine][0]]?.staves[0]?._origTuning ?? []).length).find((o) => o.key === choice)?.label ?? '').replace(' standard', ' std') : '';
+  $('t-retune').textContent = ['Retune', short, k ? `${k > 0 ? '+' : '−'}${Math.abs(k)}` : ''].filter(Boolean).join(' · ');
   drawHeader();
   if (render) {
     rerender();
@@ -629,34 +633,38 @@ function retuneMenu() {
     const k = songShift(), choice = tuningChoice(), st = app.retuneStats;
     const staff = t?.staves[0];
     const tun = staff ? describeTuning([...staff.tuning], role) : null;
-    const needs = [tun ? (tun.standard ? 'Standard tuning' : tun.name) : null, staff?.capo ? `capo ${staff.capo}` : null].filter(Boolean).join(', ');
+    const tunName = tun ? (tun.standard ? 'standard tuning' : tun.name) : 'the tab’s tuning';
+    const sound = k ? `${Math.abs(k)} semitone${Math.abs(k) === 1 ? '' : 's'} ${k < 0 ? 'lower' : 'higher'}` : 'the original key';
+    const summary = choice
+      ? `Frets are for your ${inst} in ${tunName}${staff?.capo ? ` with capo ${staff.capo}` : ''}, sounding in ${sound}.`
+      : `Tune your ${inst} to ${tunName}${staff?.capo ? `, capo ${staff.capo}` : ''}; the frets stay as written and it sounds in ${sound}.`;
     const lines = [];
     if (st && (st.moved || st.octave || st.dropped)) {
       lines.push(`Re-fingered ${st.moved} note${st.moved === 1 ? '' : 's'}${st.octave ? ` · ${st.octave} moved an octave` : ''}${st.dropped ? ` · ${st.dropped} doubled note${st.dropped === 1 ? '' : 's'} left out` : ''}.`);
-      // When a lot had to move, name the tuning that plays it exactly as written.
       if ((st.octave + st.dropped) / Math.max(1, st.total) > 0.03 && staff?._origTuning) {
         const ideal = describeTuning(staff._origTuning.map((p) => p + k), role);
-        if (ideal) lines.push(`Tune to ${ideal.standard ? 'standard' : ideal.name} to play it exactly as written.`);
+        if (ideal) lines.push(`In ${ideal.standard ? 'standard' : ideal.name} it would play exactly as written.`);
       }
     }
-    const kLabel = k ? `${k > 0 ? '+' : '−'}${Math.abs(k)}` : 'Original';
+    const kLabel = k ? `${Math.abs(k)} ${k < 0 ? 'lower' : 'higher'}` : 'Original key';
     return `
-      <div class="menu-row"><span>Key</span><div class="stepper">
-        <button class="btn icon ghost" data-k="-1" aria-label="Down a semitone">${icon('minus')}</button>
-        <span class="tempo" style="min-width:64px"><span>${kLabel}</span></span>
-        <button class="btn icon ghost" data-k="1" aria-label="Up a semitone">${icon('plus')}</button></div></div>
-      <div class="menu-row"><span>Your ${inst}</span>
-        <select class="mini-select" id="rt-tuning" aria-label="How your ${inst} is tuned" style="height:32px;max-width:190px">
-          <option value="" ${!choice ? 'selected' : ''}>Tuned like the tab</option>
+      <div class="menu-row"><span>My ${inst} is tuned to</span>
+        <select class="mini-select" id="rt-tuning" aria-label="How your ${inst} is tuned">
+          <option value="" ${!choice ? 'selected' : ''}>Whatever the tab needs</option>
           ${opts.map((o) => `<option value="${o.key}" ${o.key === choice ? 'selected' : ''}>${o.label}</option>`).join('')}
         </select></div>
-      <label class="menu-row" style="cursor:pointer"><span>Use a capo if it keeps the shapes</span><input type="checkbox" class="switch" id="rt-capo" ${allowCapo() ? 'checked' : ''}></label>
+      <div class="menu-row"><span>The song should sound</span><div class="stepper">
+        <button class="btn icon ghost" data-k="-1" aria-label="A semitone lower">${icon('minus')}</button>
+        <span class="tempo" style="min-width:96px"><span>${kLabel}</span></span>
+        <button class="btn icon ghost" data-k="1" aria-label="A semitone higher">${icon('plus')}</button></div></div>
       <div class="menu-sep"></div>
-      <div class="note"><b style="color:var(--text);font-weight:600">Play with:</b> ${esc(needs || '—')}${k ? ` · sounds ${Math.abs(k)} semitone${Math.abs(k) === 1 ? '' : 's'} ${k < 0 ? 'lower' : 'higher'}` : ''}</div>
+      <div class="note">${esc(summary)}</div>
       ${lines.map((l) => `<div class="note" style="padding-top:0">${esc(l)}</div>`).join('')}
+      ${choice ? `<label class="menu-row" style="cursor:pointer"><span>Use a capo instead when it keeps the shapes</span><input type="checkbox" class="switch" id="rt-capo" ${allowCapo() ? 'checked' : ''}></label>` : ''}
       ${k || choice ? `<div class="menu-sep"></div><button class="menu-item" data-reset><span class="check"></span>Back to the original</button>` : ''}`;
   }, {
     align: 'end',
+    className: 'retune-menu',
     onClick: (e, m) => {
       const kb = e.target.closest('[data-k]');
       if (kb && e.type === 'click') {
@@ -772,6 +780,49 @@ function unlockAudio() {
   unlockAudio.el = el;
 }
 ['pointerdown', 'keydown', 'touchend'].forEach((ev) => document.addEventListener(ev, unlockAudio, { capture: true, passive: true }));
+
+// ---------- touch: faders you can grab anywhere, and pinch to resize the sheet
+// iOS range inputs only move when you hit the thumb exactly. On touch, set the value from wherever the finger is.
+document.addEventListener('pointerdown', (e) => {
+  const input = e.target.closest?.('input[type="range"]');
+  if (!input || e.pointerType === 'mouse') return;
+  e.preventDefault();
+  const set = (ev) => {
+    const r = input.getBoundingClientRect(), thumb = 14;
+    const f = Math.min(1, Math.max(0, (ev.clientX - r.left - thumb) / (r.width - thumb * 2)));
+    const min = Number(input.min || 0), max = Number(input.max || 100), step = Number(input.step || 1);
+    const v = Math.round((min + f * (max - min)) / step) * step;
+    if (String(v) !== input.value) { input.value = v; input.dispatchEvent(new Event('input', { bubbles: true })); }
+  };
+  set(e);
+  input.setPointerCapture?.(e.pointerId);
+  const move = (ev) => set(ev);
+  const up = () => { input.removeEventListener('pointermove', move); input.dispatchEvent(new Event('change', { bubbles: true })); };
+  input.addEventListener('pointermove', move);
+  input.addEventListener('pointerup', up, { once: true });
+  input.addEventListener('pointercancel', up, { once: true });
+}, { capture: true });
+
+// Pinch on the sheet changes the sheet size (re-laid out crisply) instead of zooming the whole page.
+// Safari sends gesture* events; elsewhere pinch is ctrl+wheel (handled above). Page-level pinch zoom is blocked
+// because it scales the toolbars too and leaves the app half off-screen.
+let pinchBase = null;
+document.addEventListener('gesturestart', (e) => {
+  e.preventDefault();
+  if (document.body.dataset.screen === 'song' && e.target.closest?.('#viewport')) pinchBase = zoomLevel();
+}, { passive: false });
+document.addEventListener('gesturechange', (e) => {
+  e.preventDefault();
+  if (pinchBase != null) $('sheet').style.transform = `scale(${Math.max(0.5, Math.min(2.5, e.scale))})`;
+}, { passive: false });
+document.addEventListener('gestureend', (e) => {
+  e.preventDefault();
+  if (pinchBase == null) return;
+  $('sheet').style.transform = '';
+  const z = Math.round(Math.max(0.5, Math.min(2, pinchBase * e.scale)) * 20) / 20;
+  pinchBase = null;
+  if (z !== zoomLevel()) zoom(z - zoomLevel());
+}, { passive: false });
 
 // ================= boot =================
 await store.init();

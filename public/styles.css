@@ -22,6 +22,8 @@
   --on-ink: #ffffff;
   --shadow: 0 1px 2px rgb(0 0 0 / .06), 0 8px 24px rgb(0 0 0 / .10);
 
+  --hover-bg: var(--hover);
+  --hover-press: var(--press);
   --r: 6px;
   --h: 32px;                /* control height */
   --bar: 52px;
@@ -50,7 +52,7 @@
     color-scheme: dark;
   }
 }
-@media (pointer: coarse) { :root { --h: 40px; } }
+@media (pointer: coarse) { :root { --h: 44px; } }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
@@ -60,6 +62,10 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 button, input, select { font: inherit; color: inherit; letter-spacing: inherit; }
+/* iOS Safari applies its own button/select chrome (and a blue text color) unless told not to. */
+button, select, input[type="search"] { -webkit-appearance: none; appearance: none; }
+select.mini-select { padding-right: 22px; background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 12px) 55%, calc(100% - 8px) 55%; background-size: 4px 4px; background-repeat: no-repeat; }
 button { cursor: pointer; }
 h1, h2, h3, p { margin: 0; }
 [hidden] { display: none !important; }
@@ -79,17 +85,17 @@ h1, h2, h3, p { margin: 0; }
   background: var(--chrome); font-weight: 500; white-space: nowrap; text-decoration: none; color: var(--text);
   transition: background-color .12s, color .12s, border-color .12s;
 }
-.btn:hover { background: var(--hover); }
+.btn:hover { background: var(--hover-bg); }
 .btn:active { background: var(--press); }
 .btn:disabled { opacity: .4; cursor: default; background: none; }
 .btn.ghost { border-color: transparent; background: none; color: var(--text-2); }
-.btn.ghost:hover { background: var(--hover); color: var(--text); }
+.btn.ghost:hover { background: var(--hover-bg); color: var(--text); }
 .btn.icon { width: var(--h); padding: 0; }
 .btn.sm { height: 24px; width: 24px; }
 .btn.primary { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
 .btn.primary:hover { opacity: .88; }
 .btn.toggle { border-color: transparent; background: none; color: var(--text-2); }
-.btn.toggle:hover { background: var(--hover); color: var(--text); }
+.btn.toggle:hover { background: var(--hover-bg); color: var(--text); }
 .btn.toggle[aria-pressed="true"] { color: var(--accent-text); background: var(--accent-wash); }
 
 kbd { font: 500 12px/16px var(--font); padding: 0 5px; border-radius: 4px; border: 1px solid var(--line-strong); color: var(--text-3); }
@@ -127,7 +133,7 @@ body[data-screen="library"] #library, body[data-screen="song"] #song { display: 
 .side { border-right: 1px solid var(--line); padding: 12px 8px; overflow: auto; }
 .side-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 32px; padding: 0 10px; border-radius: var(--r); color: var(--text-2); text-decoration: none; font-weight: 500; }
 .side-item span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.side-item:hover { background: var(--hover); color: var(--text); }
+.side-item:hover { background: var(--hover-bg); color: var(--text); }
 .side-item[aria-current="true"] { background: var(--hover); color: var(--text); }
 .side-item .count { color: var(--text-3); font-weight: 400; font-variant-numeric: tabular-nums; }
 .side-head { display: flex; align-items: center; justify-content: space-between; height: 32px; margin-top: 16px; padding: 0 4px 0 10px; color: var(--text-3); font-size: 12px; font-weight: 500; }
@@ -144,7 +150,7 @@ body[data-screen="library"] #library, body[data-screen="song"] #song { display: 
 /* song table */
 .table { border-top: 1px solid var(--line); }
 .row { display: grid; grid-template-columns: var(--cols); align-items: center; gap: 16px; min-height: 52px; padding: 6px 8px; border-bottom: 1px solid var(--line); text-decoration: none; color: inherit; cursor: pointer; position: relative; background: var(--chrome); }
-.row:hover { background: var(--hover); }
+.row:hover { background: var(--hover-bg); }
 .row.head { min-height: 32px; cursor: default; color: var(--text-2); font-size: 12px; font-weight: 500; }
 .row.head:hover { background: var(--chrome); }
 .row.head button { border: 0; background: none; padding: 0; color: inherit; font-weight: inherit; display: inline-flex; gap: 4px; align-items: center; }
@@ -176,7 +182,7 @@ body[data-screen="library"] #library, body[data-screen="song"] #song { display: 
   padding: 4px; border-radius: 8px; background: var(--chrome); border: 1px solid var(--line-strong); box-shadow: var(--shadow); }
 .menu-label { padding: 8px 8px 4px; font-size: 12px; font-weight: 500; color: var(--text-3); }
 .menu-item { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 6px 8px; border: 0; border-radius: 4px; background: none; text-align: left; color: var(--text); text-decoration: none; }
-.menu-item:hover, .menu-item.active { background: var(--hover); }
+.menu-item:hover, .menu-item.active { background: var(--hover-bg); }
 .menu-item .grow { min-width: 0; }
 .menu-item .meta { font-size: 12px; white-space: nowrap; }
 .menu-item .check { width: 16px; color: var(--text); flex: none; }
@@ -195,7 +201,7 @@ body[data-screen="library"] #library, body[data-screen="song"] #song { display: 
 /* search results */
 .menu.results { max-width: none; }
 .result { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; padding: 6px 6px 6px 8px; border-radius: 4px; cursor: pointer; }
-.result:hover, .result.active { background: var(--hover); }
+.result:hover, .result.active { background: var(--hover-bg); }
 .result .t { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .result .s { color: var(--text-2); font-size: 12px; line-height: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .result .btn { height: 28px; border-color: transparent; background: none; color: var(--text-2); }
@@ -209,12 +215,12 @@ body[data-screen="library"] #library, body[data-screen="song"] #song { display: 
 .back { padding: 0 8px 0 4px; gap: 2px; max-width: 200px; }
 .back span { overflow: hidden; text-overflow: ellipsis; }
 .song-id { display: flex; align-items: center; gap: 8px; min-width: 0; height: var(--h); padding: 0 8px 0 10px; margin-left: 4px; border: 0; border-radius: var(--r); background: none; }
-.song-id:hover, .song-id[aria-expanded="true"] { background: var(--hover); }
+.song-id:hover, .song-id[aria-expanded="true"] { background: var(--hover-bg); }
 .song-id .i { color: var(--text-3); }
 #s-title { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #s-artist { color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .part { border-color: transparent; background: var(--hover); gap: 8px; padding: 0 8px 0 10px; max-width: 360px; }
-.part:hover { background: var(--press); }
+.part:hover { background: var(--hover-press); }
 .part > span { overflow: hidden; text-overflow: ellipsis; }
 .part .meta { font-weight: 400; }
 .part .meta.warn, .menu .warn { color: var(--accent-text); }
@@ -229,7 +235,7 @@ body[data-screen="library"] #library, body[data-screen="song"] #song { display: 
 .sec { position: relative; flex: var(--w) 0 0; min-width: 64px; display: flex; align-items: center; padding: 0 10px; border: 0; border-right: 1px solid var(--line); background: none;
   font-size: 13px; font-weight: 500; color: var(--text-2); white-space: nowrap; overflow: hidden; text-align: left; user-select: none; -webkit-touch-callout: none; }
 .sec span { overflow: hidden; text-overflow: ellipsis; }
-.sec:hover { background: var(--hover); color: var(--text); }
+.sec:hover { background: var(--hover-bg); color: var(--text); }
 .sec.now { color: var(--text); }
 .sec.loop { background: var(--accent-wash); color: var(--accent-text); }
 .sec .best { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--good); }
@@ -285,7 +291,7 @@ body[data-screen="library"] #library, body[data-screen="song"] #song { display: 
 .time .meta { color: var(--text-3); }
 .stepper { display: flex; align-items: center; margin: 0 4px; }
 .tempo { display: flex; flex-direction: column; align-items: center; justify-content: center; height: var(--h); min-width: 56px; border: 0; background: none; padding: 0 2px; line-height: 14px; border-radius: var(--r); }
-.tempo:hover { background: var(--hover); }
+.tempo:hover { background: var(--hover-bg); }
 .tempo #sp-pct { font-weight: 500; }
 .tempo .meta { font-size: 12px; }
 .tempo.changed #sp-pct { color: var(--accent-text); }
@@ -327,7 +333,7 @@ body.stage .viewport { padding: 12px; }
 .switcher input { width: 100%; height: 44px; padding: 0 12px 0 36px; border: 0; background: none; font-size: 15px; outline: none; }
 .switcher .sw-list { overflow: auto; padding: 4px; max-height: min(60vh, 480px); }
 .sw-item { display: grid; grid-template-columns: 20px 1fr auto; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; border: 0; border-radius: 4px; background: none; text-align: left; }
-.sw-item:hover, .sw-item.active { background: var(--hover); }
+.sw-item:hover, .sw-item.active { background: var(--hover-bg); }
 .sw-item .n { color: var(--text-3); font-variant-numeric: tabular-nums; text-align: right; }
 .sw-item .t { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
 .sw-item .s { color: var(--text-2); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
@@ -345,11 +351,12 @@ body.dragging, body.dragging * { cursor: grabbing !important; user-select: none 
   *, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; scroll-behavior: auto !important; }
 }
 /* Increase Contrast (iOS/macOS/Windows): push secondary text and hairlines further, in both color schemes. */
+/* A gentle step up, not a different look: secondary text and hairlines get a little stronger, the hierarchy stays. */
 @media (prefers-contrast: more) {
-  :root { --line: #a8a8a0; --line-strong: #77776f; --text-2: #2f2f2b; --text-3: #4a4a45; }
+  :root { --line: #dad9d2; --line-strong: #c2c1b9; --text-2: #4a4a44; --text-3: #6c6c65; }
 }
 @media (prefers-contrast: more) and (prefers-color-scheme: dark) {
-  :root { --line: #45453f; --line-strong: #67675f; --text-2: #dcdcd6; --text-3: #b4b4ad; }
+  :root { --line: #2c2c2a; --line-strong: #3f3f3b; --text-2: #c2c2bb; --text-3: #979790; }
 }
 
 /* ================= Narrow screens ================= */
@@ -387,4 +394,61 @@ body.dragging, body.dragging * { cursor: grabbing !important; user-select: none 
   .t-tools { justify-content: center; gap: 0; }
   .t-tools .btn.toggle { padding: 0 8px; }
   #t-count, #t-click { display: none; }
+}
+
+
+/* ================= Touch (iPad / phone) =================
+   Apple HIG sizes, no sticky hover after a tap, real pressed states, no accidental selection or callouts,
+   no rubber-banding of the whole page, and controls you can hit with a thumb on a music stand. */
+html, body { overscroll-behavior: none; }
+button, a, input, select, .row, .sec, .chip { touch-action: manipulation; }
+.bar, .map, .transport, .practice, .side, .menu, .page-head, .row, .switcher, .dialog h2 { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+@media (hover: none) {
+  :root { --hover-bg: transparent; --hover-press: transparent; }
+  .btn:active, .btn.ghost:active, .btn.toggle:active, .menu-item:active, .sw-item:active, .result:active,
+  .row:active, .side-item:active, .sec:active, .tempo:active, .song-id:active, .part:active, .seg button:active { background-color: var(--press); }
+  .btn.play:active { opacity: .8; }
+}
+@media (pointer: coarse) {
+  .bar { height: 60px; }
+  .btn.sm { height: 36px; width: 36px; }
+  .menu { padding: 6px; }
+  .menu-item, .sw-item, .result { min-height: 48px; }
+  .menu-row { min-height: 52px; }
+  .side-item { height: 44px; }
+  .row { min-height: 64px; }
+  .map { height: 48px; }
+  .sec { min-width: 76px; font-size: 14px; }
+  .transport { height: 68px; gap: 12px; }
+  .btn.play { width: 52px; height: 52px; }
+  .btn.play .i { width: 18px; height: 18px; }
+  .i { width: 18px; height: 18px; }
+  .tempo { min-width: 64px; }
+  .practice { min-height: 56px; }
+  .mini-select { height: 36px; padding: 0 8px; font-size: 15px; }
+  .switch { width: 44px; height: 26px; border-radius: 13px; }
+  .switch::after { width: 20px; height: 20px; top: 3px; left: 3px; }
+  .switch:checked::after { transform: translateX(18px); }
+  .seg button { padding: 0 14px; }
+  /* Faders: a tall hit area and a big thumb; touch anywhere on the track to set it (see main.js). */
+  input[type="range"] { height: 44px; width: 140px; touch-action: none; }
+  input[type="range"]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; }
+  input[type="range"]::-webkit-slider-thumb { width: 28px; height: 28px; margin-top: -12px; border-width: 2px; box-shadow: 0 1px 4px rgb(0 0 0 / .25); }
+  .menu .fader input { width: 200px; }
+}
+.retune-menu .menu-row > span { white-space: nowrap; }
+.retune-menu .note { max-width: 380px; }
+.retune-menu select { max-width: 200px; }
+
+/* Middle widths (iPad portrait, small laptops): drop secondary text before anything crowds. */
+@media (max-width: 1100px) and (min-width: 761px) {
+  #s-artist { display: none; }
+  #add-song { width: var(--h); padding: 0; font-size: 0; gap: 0; }
+  .part { max-width: 260px; }
+  .page { padding: 24px 24px 56px; }
+  .lib { grid-template-columns: 200px 1fr; }
+  .wordmark { width: 212px; }
+  .table.songs { --cols: minmax(0, 3fr) minmax(0, 2fr) 104px 32px; }
+  .table.songs .row > :nth-child(4) { display: none; }
+  .table.set { --cols: 16px 20px minmax(0, 3fr) minmax(0, 2fr) 104px 32px; }
 }

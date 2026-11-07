@@ -19,7 +19,23 @@ const SOUNDFONT = [path.join(ROOT, 'soundfonts/GeneralUser-GS.sf2'), path.join(A
 
 const app = express();
 // App files revalidate each load (cheap 304s); alphaTab and the soundfont are big and versioned, so cache them hard.
-app.use(express.static(path.join(ROOT, 'public'), { maxAge: 0 }));
+// App files: always revalidate (Safari otherwise keeps old modules/styles in an open tab). index.html is never cached
+// and points at the stylesheet and entry module with a version derived from the files' modification times, so a
+// changed deploy is picked up on the next load everywhere, including through a tunnel.
+const PUBLIC = path.join(ROOT, 'public');
+async function assetVersion() {
+  const files = ['index.html', 'styles.css', ...(await fs.readdir(path.join(PUBLIC, 'js'))).map((f) => `js/${f}`)];
+  const times = await Promise.all(files.map((f) => fs.stat(path.join(PUBLIC, f)).then((st) => st.mtimeMs).catch(() => 0)));
+  return Math.max(...times).toString(36);
+}
+app.get(['/', '/index.html'], (req, res, next) => {
+  Promise.all([assetVersion(), fs.readFile(path.join(PUBLIC, 'index.html'), 'utf8')]).then(([v, html]) => {
+    res.set('Cache-Control', 'no-store').type('html').send(html
+      .replace('href="/styles.css"', `href="/styles.css?v=${v}"`)
+      .replace('src="/js/main.js"', `src="/js/main.js?v=${v}"`));
+  }).catch(next);
+});
+app.use(express.static(PUBLIC, { setHeaders: (res) => res.set('Cache-Control', 'no-cache') }));
 app.use('/alphatab', express.static(ALPHATAB, { maxAge: '30d' }));
 // /soundfont redirects (uncached) to a file-specific URL that browsers may cache for a long time,
 // so switching soundfonts takes effect immediately.
