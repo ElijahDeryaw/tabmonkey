@@ -1,7 +1,11 @@
 // Converts Songsterr per-track revision JSON into an alphaTab Score, then to Guitar Pro 7 bytes.
 import * as alphaTab from '@coderline/alphatab';
+import { isDrumTrack, roleOf, partNames, isLowToHigh } from './tracks.js';
 
 const M = alphaTab.model;
+
+/** Bump when conversion output changes, so cached .gp files on disk are rebuilt. */
+export const CONVERTER_VERSION = 3;
 
 const SLIDE_OUT = {
   shift: M.SlideOutType.Shift,
@@ -66,7 +70,7 @@ export function songsterrToScore(meta, parts) {
   // Resolve drum articulations up front: alphaTab's importer resets the global model id counters,
   // so it must not run while we are creating Bars/Voices/Beats (that yields duplicate ids in GP7 export).
   for (const part of valid)
-    if (part.tuningFlat || /drum|percussion/i.test(part.instrument || ''))
+    if (isDrumTrack(part))
       for (const m of part.measures) for (const v of m.voices || []) for (const b of v.beats || [])
         for (const n of b.notes || []) if (!n.rest) lookupArticulation(n.fret);
   const score = new M.Score();
@@ -115,13 +119,18 @@ export function songsterrToScore(meta, parts) {
   const pendingLyrics = [];
   let channel = 0;
   const nextChannel = () => { if (channel === 9) channel++; return channel++; };
-  for (const part of valid) {
+  const metaTracks = parts.map((p, i) => ({ ...p, ...meta.tracks?.[i] }));
+  const names = partNames(metaTracks);
+  const mix = defaultMix(metaTracks, names);
+  for (const [pi, part] of parts.entries()) {
+    if (!part) continue;
     const track = new M.Track();
-    track.name = part.name || part.instrument || `Track ${part.partId}`;
-    track.shortName = (part.instrument || track.name).slice(0, 10);
+    track.name = names[pi];
+    track.shortName = names[pi].slice(0, 10);
     track.ensureStaveCount(1);
     const staff = track.staves[0];
-    const isDrums = !!part.tuningFlat || /drum|percussion/i.test(part.instrument || '');
+    const isDrums = isDrumTrack(part);
+    const flip = !isDrums && isLowToHigh(part.tuning);
 
     if (isDrums) {
       staff.isPercussion = true;
@@ -130,13 +139,15 @@ export function songsterrToScore(meta, parts) {
       track.playbackInfo.secondaryChannel = 9;
       track.playbackInfo.program = 0;
     } else {
-      staff.stringTuning = new M.Tuning('', part.tuning || [64, 59, 55, 50, 45, 40], false);
-      track.playbackInfo.program = part.instrumentId ?? 25;
+      const tuning = part.tuning || [64, 59, 55, 50, 45, 40];
+      staff.stringTuning = new M.Tuning('', flip ? [...tuning].reverse() : tuning, false);
+      if (part.capo) staff.capo = part.capo;
+      track.playbackInfo.program = mix[pi].program ?? part.instrumentId ?? 25;
       track.playbackInfo.primaryChannel = nextChannel();
       track.playbackInfo.secondaryChannel = nextChannel();
     }
-    track.playbackInfo.volume = Math.round(Math.min(1, part.volume ?? 1) * 15);
-    track.playbackInfo.balance = Math.round(8 + (part.balance ?? 0) * 8);
+    track.playbackInfo.volume = Math.round(Math.min(1, part.volume ?? 1) * mix[pi].volume);
+    track.playbackInfo.balance = part.balance ? Math.round(8 + part.balance * 8) : mix[pi].balance;
     score.addTrack(track);
 
     // Drums: Songsterr "fret" = Guitar Pro articulation id. Register each used id on the track.
@@ -199,7 +210,7 @@ export function songsterrToScore(meta, parts) {
               if (idx < 0) continue;
               note.percussionArticulation = idx;
             } else {
-              const s = Math.round(n.string);
+              const s = flip ? stringCount - 1 - Math.round(n.string) : Math.round(n.string);
               note.string = stringCount - s; // Songsterr 0 = highest string; alphaTab 1 = lowest
               const k = `${vi}:${s}`;
               note.fret = n.fret ?? (n.tie ? lastFret.get(k) ?? 0 : 0);
@@ -254,6 +265,26 @@ export function songsterrToScore(meta, parts) {
   // applyLyrics walks beat.nextBeat, which only exists after finish()
   for (const [track, lyrics] of pendingLyrics) track.applyLyrics(lyrics);
   return score;
+}
+
+/**
+ * A band-like default mix (alphaTab volume 0-16, balance 0-16 with 8 = centre). Songsterr ships every part at
+ * full volume, centred, and plays vocal lines on instruments like Viola or Tenor Sax, which sounds harsh.
+ */
+function defaultMix(tracks, names) {
+  const VOLUME = { drums: 14, bass: 13, guitar: 12, keys: 11, vocals: 9, other: 11 };
+  let rhythm = 0, extra = 0;
+  return tracks.map((t, i) => {
+    const role = roleOf(t);
+    const m = { volume: VOLUME[role], balance: 8 };
+    if (role === 'vocals') m.program = 53; // Voice Oohs: a soft guide melody instead of a sax or viola
+    if (role === 'guitar' || role === 'keys') {
+      if (/rhythm/i.test(names[i])) m.balance = rhythm++ % 2 ? 13 : 3; // double-tracked rhythm parts spread L/R
+      else if (/extra|overdub|acoustic|clean/i.test(names[i])) m.balance = extra++ % 2 ? 11 : 5;
+      if (/lead|solo/i.test(names[i])) m.volume += 1;
+    }
+    return m;
+  });
 }
 
 export function scoreToGp7(score) {

@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import zlib from 'node:zlib';
 
-const CACHE = path.resolve('cache');
+export const CACHE = path.resolve('cache');
 const API = 'https://www.songsterr.com/api';
 const CDNS = ['https://dqsljvtekg760.cloudfront.net', 'https://d3d3l6a6rcgkaf.cloudfront.net'];
 const HEADERS = { 'User-Agent': 'musicvisualize/0.1 (personal data project)', Accept: 'application/json' };
@@ -34,7 +34,7 @@ const writeCache = async (data, ...p) => {
   await fs.writeFile(path.join(CACHE, ...p), JSON.stringify(data));
 };
 
-async function cachedSongs() {
+export async function cachedSongs() {
   const dirs = await fs.readdir(CACHE).catch(() => []);
   const metas = await Promise.all(dirs.map((d) => readCache(d, 'meta.json')));
   return metas.filter(Boolean);

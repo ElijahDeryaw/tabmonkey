@@ -2,276 +2,125 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tab Viewer</title>
-<style>
-  :root {
-    --bg: #f4f2ee; --panel: #ffffff; --ink: #1d1d1f; --muted: #6b6b72; --line: #e2dfd8;
-    --accent: #c2410c; --accent-soft: #fff1e8; --sheet: #ffffff;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg: #17171a; --panel: #222226; --ink: #ececef; --muted: #9a9aa3; --line: #34343a; --accent: #fb923c; --accent-soft: #3a2618; }
-  }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; }
-  body { font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink);
-         display: grid; grid-template-rows: auto auto 1fr; }
-  button, select, input { font: inherit; color: inherit; }
-
-  header { display: flex; gap: 16px; align-items: center; padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--line); }
-  header h1 { font-size: 16px; margin: 0; white-space: nowrap; }
-  .search { position: relative; flex: 1; max-width: 560px; }
-  .search input { width: 100%; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
-  .search input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-  #results { position: absolute; z-index: 1001; top: calc(100% + 4px); left: 0; right: 0; max-height: 60vh; overflow: auto;
-             background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 12px 32px rgb(0 0 0 / .18); display: none; }
-  #results.open { display: block; }
-  #results button { display: block; width: 100%; text-align: left; padding: 9px 12px; border: 0; background: none; cursor: pointer; border-bottom: 1px solid var(--line); }
-  #results button:hover, #results button:focus { background: var(--accent-soft); outline: none; }
-  #results .meta { color: var(--muted); font-size: 12px; }
-  #results .note { padding: 9px 12px; color: var(--muted); font-size: 12px; }
-  #song { margin-left: auto; text-align: right; min-width: 0; }
-  #song .t { font-weight: 600; } #song .a { color: var(--muted); font-size: 12px; }
-
-  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 20px; background: var(--panel); border-bottom: 1px solid var(--line); }
-  .toolbar .grp { display: flex; gap: 4px; align-items: center; padding-right: 10px; margin-right: 2px; border-right: 1px solid var(--line); }
-  .toolbar .grp:last-child { border-right: 0; }
-  .btn { text-decoration: none; display: inline-block; color: var(--ink); padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); cursor: pointer; }
-  .btn:hover:not(:disabled) { border-color: var(--accent); }
-  .btn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .btn:disabled { opacity: .45; cursor: default; }
-  .toolbar label { color: var(--muted); font-size: 12px; }
-  .toolbar select { padding: 5px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
-  #time { font-variant-numeric: tabular-nums; color: var(--muted); min-width: 92px; }
-
-  main { display: grid; grid-template-columns: 280px 1fr; min-height: 0; }
-  aside { border-right: 1px solid var(--line); background: var(--panel); overflow: auto; padding: 12px; }
-  aside h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 4px 4px 8px; }
-  .track { display: block; width: 100%; text-align: left; padding: 8px 10px; margin-bottom: 4px; border: 1px solid transparent; border-radius: 6px; background: none; cursor: pointer; }
-  .track:hover { background: var(--bg); }
-  .track.on { background: var(--accent-soft); border-color: var(--accent); }
-  .track .i { font-size: 12px; color: var(--muted); }
-  .track[disabled] { opacity: .45; cursor: not-allowed; }
-  .hint { font-size: 12px; color: var(--muted); margin: 10px 4px; }
-  #warn { font-size: 12px; color: var(--accent); margin: 10px 4px; }
-
-  #viewport { overflow: auto; position: relative; padding: 20px; }
-  #sheet { background: var(--sheet); border-radius: 6px; box-shadow: 0 1px 3px rgb(0 0 0 / .12); max-width: 1300px; margin: 0 auto; min-height: 200px; }
-  #empty { text-align: center; color: var(--muted); padding: 80px 20px; }
-  #overlay { position: absolute; inset: 0; display: none; place-items: center; background: rgb(0 0 0 / .08); z-index: 1000; }
-  #overlay.on { display: grid; }
-  #overlay div { background: var(--panel); padding: 14px 20px; border-radius: 8px; box-shadow: 0 4px 16px rgb(0 0 0 / .2); }
-
-  /* alphaTab cursor + highlight */
-  .at-cursor-bar { background: rgb(255 180 120 / .18); }
-  .at-cursor-beat { background: #c2410c; width: 3px; }
-  .at-selection div { background: rgb(194 65 12 / .12); }
-  .at-highlight * { fill: #c2410c; stroke: #c2410c; }
-
-  @media (max-width: 800px) {
-    header { flex-wrap: wrap; } #song { margin-left: 0; text-align: left; }
-    main { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
-    aside { border-right: 0; border-bottom: 1px solid var(--line); max-height: 30vh; }
-    #viewport { padding: 8px; }
-  }
-</style>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#16161a">
+<title>Tabs</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon.svg">
+<link rel="stylesheet" href="/styles.css">
 </head>
-<body>
-<header>
-  <h1>Tab Viewer</h1>
+<body data-view="home">
+<header class="top">
+  <button id="home-btn" class="brand" title="Home"><span class="logo">𝄞</span><span class="brand-name">Tabs</span></button>
   <div class="search">
-    <input id="q" type="search" placeholder="Search a song or artist… (e.g. Enter Sandman)" autocomplete="off">
+    <input id="q" type="search" placeholder="Find a song or artist" autocomplete="off" enterkeyhint="search" aria-label="Search songs">
+    <kbd class="search-key">/</kbd>
     <div id="results" role="listbox"></div>
   </div>
-  <div id="song"></div>
+  <button id="song-title" class="song-title" title="Tracks, mix &amp; view (T)">
+    <span class="st-main"><span class="st-t"></span><span class="st-a"></span></span>
+    <span id="st-part" class="st-part"></span>
+  </button>
+  <button id="search-toggle" class="icon-btn" aria-label="Search">⌕</button>
+  <button id="stage-btn" class="icon-btn" title="Stage mode (F)" aria-label="Stage mode">⛶</button>
+  <button id="profile-btn" class="profile-chip" title="Switch player"></button>
 </header>
 
-<div class="toolbar">
-  <div class="grp">
-    <button class="btn" id="play" disabled title="Play / pause (space)">▶ Play</button>
-    <button class="btn" id="stop" disabled title="Stop">■</button>
-    <span id="time">0:00 / 0:00</span>
+<main id="home" class="home">
+  <div class="hello">
+    <h1 id="hello">Hey there</h1>
+    <p id="hello-sub" class="muted"></p>
   </div>
-  <div class="grp">
-    <label for="speed">Speed</label>
-    <select id="speed"><option value="0.5">50%</option><option value="0.75">75%</option><option value="1" selected>100%</option><option value="1.25">125%</option></select>
-    <button class="btn" id="metronome" title="Metronome">Metronome</button>
-    <button class="btn" id="loop" title="Loop selection">Loop</button>
-  </div>
-  <div class="grp">
-    <label>View</label>
-    <button class="btn on" data-profile="TabMixed">Tab</button>
-    <button class="btn" data-profile="Default">Tab + Notation</button>
-    <button class="btn" data-profile="Score">Notation</button>
-  </div>
-  <div class="grp">
-    <label for="zoom">Zoom</label>
-    <select id="zoom"><option>0.8</option><option>0.9</option><option selected>1</option><option>1.1</option><option>1.25</option><option>1.5</option></select>
-    <label for="layout">Layout</label>
-    <select id="layout"><option value="Page">Page</option><option value="Horizontal">Horizontal</option></select>
-  </div>
-  <div class="grp">
-    <a class="btn" id="dl-gp" href="#" download hidden>Download .gp</a>
-    <a class="btn" id="dl-json" href="#" download hidden>Raw JSON</a>
-  </div>
-</div>
-
-<main>
-  <aside>
-    <h2>Tracks</h2>
-    <div id="tracks"><p class="hint">Search for a song to load its tracks.</p></div>
-    <p class="hint">Ctrl/⌘-click to show several tracks together.</p>
-    <div id="warn"></div>
-  </aside>
-  <div id="viewport">
-    <div id="overlay"><div id="overlay-msg">Loading…</div></div>
-    <div id="sheet"><div id="empty">Search for a song above to render its tabs.</div></div>
-  </div>
+  <div id="continue"></div>
+  <section id="mine-wrap" hidden><h2>Your songs</h2><div id="mine" class="song-list"></div></section>
+  <section id="lib-wrap" hidden><h2>On this Pi <span class="muted small">— pulled by the band</span></h2><div id="lib" class="song-list"></div></section>
 </main>
 
+<main id="song-view" class="song-view">
+  <nav id="sections" class="sections" aria-label="Sections"></nav>
+  <div id="viewport" class="viewport">
+    <button id="stage-exit" class="icon-btn stage-exit" title="Leave stage mode (F)" aria-label="Leave stage mode">✕</button>
+    <div id="sheet" class="sheet"></div>
+    <div id="loading" class="loading" hidden><div class="spinner"></div><span id="loading-msg">Loading…</span></div>
+  </div>
+  <div id="practice" class="practice" hidden></div>
+  <footer class="transport">
+    <div class="tgroup">
+      <button id="t-back" class="tbtn" title="Back to start of section (←)" aria-label="Back to section start">⏮</button>
+      <button id="t-play" class="tbtn play" disabled title="Play / pause (Space)" aria-label="Play">▶</button>
+      <span id="t-time" class="time">0:00</span>
+    </div>
+    <div class="tgroup speed" title="Playback speed ([ and ])">
+      <button id="sp-down" class="tbtn sm" aria-label="Slower">−</button>
+      <button id="sp-val" class="speed-val" title="Reset to 100%"><b>100%</b><small id="sp-bpm"></small></button>
+      <button id="sp-up" class="tbtn sm" aria-label="Faster">+</button>
+    </div>
+    <div class="tgroup">
+      <button id="t-loop" class="tog" title="Loop the current section (L)">⟲ Loop</button>
+      <button id="t-count" class="tog" title="Count-in before playing (C)">Count-in</button>
+      <button id="t-metro" class="tog" title="Metronome click (M)">Click</button>
+    </div>
+    <div class="seg" id="band-mode" role="radiogroup" aria-label="What you hear">
+      <button data-mode="full" class="on" title="Everyone plays">Full band</button>
+      <button data-mode="along" title="Your part is muted: you play it over the band (B)">Play along</button>
+      <button data-mode="solo" title="Only your part, to hear exactly how it goes">Just me</button>
+    </div>
+    <div id="sf-status" class="sf-status" hidden><div class="sf-bar"><i></i></div><span>Loading sounds</span></div>
+  </footer>
+</main>
+
+<aside id="drawer" class="drawer" aria-label="Tracks and view">
+  <div class="drawer-head"><h2>Tracks &amp; mix</h2><button class="icon-btn" data-close aria-label="Close">✕</button></div>
+  <p class="muted small">Tap a track to make it yours. <span class="desk">Ctrl/⌘-click</span><span class="touch">Long-press</span> to show several together.</p>
+  <div id="tracks" class="tracks"></div>
+  <h3>View</h3>
+  <div class="seg wide" id="view-seg">
+    <button data-view="tab">Tab</button><button data-view="both">Tab + Notes</button><button data-view="notation">Notation</button>
+  </div>
+  <div class="row">
+    <div class="seg" id="layout-seg"><button data-layout="Page">Page</button><button data-layout="Horizontal">One line</button></div>
+    <div class="zoom"><button class="tbtn sm" id="z-out" aria-label="Zoom out">−</button><span id="z-val">100%</span><button class="tbtn sm" id="z-in" aria-label="Zoom in">+</button></div>
+  </div>
+  <h3>Data</h3>
+  <div class="row"><a class="btn" id="dl-gp" href="#" download>Guitar Pro file</a><a class="btn" id="dl-json" href="#" download>Raw Songsterr JSON</a></div>
+</aside>
+<div id="scrim" class="scrim"></div>
+
+<dialog id="profile-dlg" class="dlg">
+  <form method="dialog" id="profile-form">
+    <h2>Who's playing?</h2>
+    <div id="profile-list" class="profile-list"></div>
+    <label class="field"><span>Your name</span><input id="p-name" required maxlength="24" autocomplete="nickname" placeholder="e.g. Eli"></label>
+    <span class="field-label">You play</span>
+    <div id="p-inst" class="inst-grid"></div>
+    <p class="muted small">Your track opens automatically in every song, and your practice progress is saved on this device.</p>
+    <div class="dlg-actions"><button class="btn primary" id="p-save" value="save">Let's play</button></div>
+  </form>
+</dialog>
+
+<dialog id="keys-dlg" class="dlg">
+  <h2>Shortcuts</h2>
+  <dl class="keys">
+    <dt><kbd>Space</kbd></dt><dd>Play / pause</dd>
+    <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>Previous / next section</dd>
+    <dt><kbd>L</kbd></dt><dd>Loop the current section</dd>
+    <dt>Drag on the sheet</dt><dd>Loop exactly those bars</dd>
+    <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Slower / faster (5%)</dd>
+    <dt><kbd>A</kbd></dt><dd>Missed it: don't count this pass</dd>
+    <dt><kbd>B</kbd></dt><dd>Cycle Full band → Play along → Just me</dd>
+    <dt><kbd>C</kbd> / <kbd>M</kbd></dt><dd>Count-in / metronome</dd>
+    <dt><kbd>T</kbd></dt><dd>Tracks &amp; mix</dd>
+    <dt><kbd>F</kbd></dt><dd>Stage mode</dd>
+    <dt><kbd>/</kbd></dt><dd>Search</dd>
+    <dt><kbd>Esc</kbd></dt><dd>Stop looping / close</dd>
+  </dl>
+  <form method="dialog" class="dlg-actions"><button class="btn">Got it</button></form>
+</dialog>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
 <script src="/alphatab/alphaTab.min.js"></script>
-<script>
-const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const fmt = (ms) => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
-
-let api = null, info = null, scoreIndexOf = [], selected = new Set(), profile = 'TabMixed';
-
-function overlay(msg) { $('overlay').classList.toggle('on', !!msg); if (msg) $('overlay-msg').textContent = msg; }
-
-function createApi() {
-  $('sheet').innerHTML = '';
-  api = new alphaTab.AlphaTabApi($('sheet'), {
-    core: { fontDirectory: '/alphatab/font/', includeNoteBounds: false },
-    display: { systemPaddingTop: 25, systemPaddingBottom: 15, scale: Number($('zoom').value), layoutMode: alphaTab.LayoutMode[$('layout').value], staveProfile: alphaTab.StaveProfile[profile] },
-    notation: { rhythmMode: alphaTab.TabRhythmMode.ShowWithBars },
-    player: {
-      playerMode: alphaTab.PlayerMode.EnabledSynthesizer,
-      soundFont: '/alphatab/soundfont/sonivox.sf2',
-      scrollElement: $('viewport'),
-      enableCursor: true, enableUserInteraction: true,
-    },
-  });
-  api.renderStarted.on(() => overlay('Rendering…'));
-  api.renderFinished.on(() => overlay(null));
-  api.error.on((e) => { overlay(null); $('warn').textContent = 'Render error: ' + (e.message || e); console.error(e); });
-  api.playerReady.on(() => { $('play').disabled = false; $('stop').disabled = false; });
-  api.playerStateChanged.on((e) => { $('play').textContent = e.state === 1 ? '❚❚ Pause' : '▶ Play'; });
-  api.playerPositionChanged.on((e) => { $('time').textContent = `${fmt(e.currentTime)} / ${fmt(e.endTime)}`; });
-  api.scoreLoaded.on(() => renderSelected());
-}
-
-// ---- search
-let searchTimer, searchSeq = 0;
-$('q').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(doSearch, 300); });
-$('q').addEventListener('keydown', (e) => { if (e.key === 'Enter') { clearTimeout(searchTimer); doSearch(); } if (e.key === 'Escape') $('results').classList.remove('open'); });
-document.addEventListener('click', (e) => { if (!e.target.closest('.search')) $('results').classList.remove('open'); });
-
-async function doSearch() {
-  const q = $('q').value.trim();
-  if (!q) return $('results').classList.remove('open');
-  const seq = ++searchSeq;
-  $('results').innerHTML = '<div class="note">Searching…</div>'; $('results').classList.add('open');
-  try {
-    const r = await fetch('/api/search?q=' + encodeURIComponent(q)).then((r) => r.json());
-    if (seq !== searchSeq) return;
-    let html = '';
-    if (r.source === 'cache') html += `<div class="note">Songsterr search unavailable (${esc(r.error)}). Showing locally cached songs.</div>`;
-    if (!r.results?.length) html += '<div class="note">No results.</div>';
-    for (const s of r.results || [])
-      html += `<button data-id="${s.songId}"><div>${esc(s.title)}</div><div class="meta">${esc(s.artist)} · ${s.tracks.length} tracks</div></button>`;
-    $('results').innerHTML = html;
-  } catch (e) { $('results').innerHTML = `<div class="note">Search failed: ${esc(e.message)}</div>`; }
-}
-$('results').addEventListener('click', (e) => {
-  const b = e.target.closest('button[data-id]'); if (!b) return;
-  $('results').classList.remove('open');
-  loadSong(Number(b.dataset.id));
-});
-
-// ---- song loading
-async function loadSong(id, trackFromUrl) {
-  overlay('Fetching tabs…'); $('warn').textContent = '';
-  try {
-    const res = await fetch('/api/song/' + id);
-    const body = await res.json();
-    if (!res.ok) throw new Error(body.error);
-    info = body;
-  } catch (e) { overlay(null); $('warn').textContent = 'Could not load song: ' + e.message; return; }
-
-  $('song').innerHTML = `<div class="t">${esc(info.title)}</div><div class="a">${esc(info.artist)} · ${info.bars} bars · ${info.tempo} bpm</div>`;
-  document.title = `${info.title} – ${info.artist} · Tab Viewer`;
-  $('dl-gp').href = `/api/song/${id}/score.gp?download=1`; $('dl-gp').hidden = false;
-  $('dl-json').href = `/api/song/${id}/raw.json`; $('dl-json').hidden = false;
-  if (info.missing.length) $('warn').textContent = `${info.missing.length} track(s) could not be fetched: ${info.missing.map((m) => m.name).join(', ')}`;
-
-  // songsterr track index -> index in the built score (only loaded tracks are in the score)
-  let n = 0; scoreIndexOf = info.tracks.map((t) => (t.loaded ? n++ : -1));
-  const wanted = trackFromUrl ?? info.defaultTrack;
-  const start = info.tracks[wanted]?.loaded ? wanted : info.tracks.findIndex((t) => t.loaded);
-  selected = new Set([start]);
-  drawTracks();
-
-  if (!api) createApi();
-  $('play').disabled = true; $('stop').disabled = true;
-  api.load(`/api/song/${id}/score.gp`);
-  history.replaceState(null, '', `#song=${id}&track=${start}`);
-}
-
-function drawTracks() {
-  $('tracks').innerHTML = info.tracks.map((t) =>
-    `<button class="track ${selected.has(t.index) ? 'on' : ''}" data-i="${t.index}" ${t.loaded ? '' : 'disabled'}>
-       <div>${esc(t.name)}</div><div class="i">${esc(t.instrument)}${t.loaded ? '' : ' · unavailable'}</div></button>`).join('');
-}
-$('tracks').addEventListener('click', (e) => {
-  const b = e.target.closest('.track'); if (!b || b.disabled) return;
-  const i = Number(b.dataset.i);
-  if (e.ctrlKey || e.metaKey) { selected.has(i) && selected.size > 1 ? selected.delete(i) : selected.add(i); }
-  else selected = new Set([i]);
-  drawTracks(); renderSelected();
-  history.replaceState(null, '', `#song=${info.songId}&track=${[...selected][0]}`);
-});
-
-function renderSelected() {
-  if (!api?.score) return;
-  const tracks = [...selected].sort((a, b) => a - b).map((i) => api.score.tracks[scoreIndexOf[i]]).filter(Boolean);
-  if (!tracks.length) return;
-  // alphaTab can't lay out drum kits in the tab-only (TabMixed) profile, so drums fall back to notation.
-  const p = profile === 'TabMixed' && tracks.some((t) => t.isPercussion) ? 'Default' : profile;
-  if (api.settings.display.staveProfile !== alphaTab.StaveProfile[p]) {
-    api.settings.display.staveProfile = alphaTab.StaveProfile[p];
-    api.updateSettings();
-  }
-  api.renderTracks(tracks);
-}
-
-// ---- view settings
-function applySettings() {
-  if (!api) return;
-  api.settings.display.scale = Number($('zoom').value);
-  api.settings.display.layoutMode = alphaTab.LayoutMode[$('layout').value];
-  api.updateSettings();
-  renderSelected();
-}
-document.querySelectorAll('[data-profile]').forEach((b) => b.addEventListener('click', () => {
-  profile = b.dataset.profile;
-  document.querySelectorAll('[data-profile]').forEach((x) => x.classList.toggle('on', x === b));
-  applySettings();
-}));
-$('zoom').addEventListener('change', applySettings);
-$('layout').addEventListener('change', applySettings);
-
-// ---- player
-$('play').addEventListener('click', () => api?.playPause());
-$('stop').addEventListener('click', () => api?.stop());
-$('speed').addEventListener('change', () => { if (api) api.playbackSpeed = Number($('speed').value); });
-$('metronome').addEventListener('click', (e) => { if (!api) return; api.metronomeVolume = api.metronomeVolume ? 0 : 1; e.target.classList.toggle('on', !!api.metronomeVolume); });
-$('loop').addEventListener('click', (e) => { if (!api) return; api.isLooping = !api.isLooping; e.target.classList.toggle('on', api.isLooping); });
-document.addEventListener('keydown', (e) => { if (e.code === 'Space' && e.target === document.body && api) { e.preventDefault(); api.playPause(); } });
-
-// ---- deep link: #song=19&track=2
-const h = new URLSearchParams(location.hash.slice(1));
-if (h.get('song')) loadSong(Number(h.get('song')), h.has('track') ? Number(h.get('track')) : undefined);
-</script>
+<script type="module" src="/js/main.js"></script>
 </body>
 </html>

@@ -1,0 +1,21 @@
+# systemd unit for running the tab app on a Raspberry Pi.
+# Install:  sudo cp deploy/musicvisualize.service /etc/systemd/system/
+#           sudo systemctl daemon-reload && sudo systemctl enable --now musicvisualize
+# Adjust User and WorkingDirectory if you cloned somewhere other than /home/pi/musicvisualize.
+[Unit]
+Description=Tabs - band practice tab viewer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/musicvisualize
+ExecStart=/usr/bin/env node server.js
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
