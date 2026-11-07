@@ -118,7 +118,7 @@ app.get('/api/song/:id/raw.json', wrap(async (req, res) => {
 
 app.listen(PORT, HOST, () => {
   const lan = Object.values(os.networkInterfaces()).flat().filter((a) => a && a.family === 'IPv4' && !a.internal).map((a) => a.address);
-  console.log(`Tab viewer running:\n  http://localhost:${PORT}`);
+  console.log(`TabMonkey running:\n  http://localhost:${PORT}`);
   for (const ip of lan) console.log(`  http://${ip}:${PORT}`);
   console.log(`  http://${os.hostname()}.local:${PORT}  (mDNS, if available)`);
   console.log(`Soundfont: ${path.relative(ROOT, SOUNDFONT)}`);

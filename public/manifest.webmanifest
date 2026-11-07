@@ -1,9 +1,16 @@
 {
-  "name": "Tabs: band practice",
-  "short_name": "Tabs",
+  "name": "TabMonkey",
+  "short_name": "TabMonkey",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#16161a",
   "theme_color": "#16161a",
-  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
 }

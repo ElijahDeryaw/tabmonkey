@@ -36,8 +36,26 @@ export function create(el, scrollEl, { scale, layout, view }) {
   // Swallow that; the caller redraws the highlight once layout is done (see highlightBars).
   const highlight = api.highlightPlaybackRange.bind(api);
   api.highlightPlaybackRange = (a, b) => { try { highlight(a, b); } catch { /* layout not ready */ } };
+  guardSelectionCursor();
   api.midiLoaded.on(indexBars);
   return api;
+}
+
+// alphaTab's private _cursorSelectRange (name mangled in the minified build) runs from player events and throws
+// when the layout it draws into isn't built yet (e.g. a range arriving mid-render). An exception there escapes
+// into alphaTab's event dispatch, so make it fail quietly; the highlight is redrawn after the next render.
+function guardSelectionCursor() {
+  for (let proto = Object.getPrototypeOf(api); proto && proto !== Object.prototype; proto = Object.getPrototypeOf(proto)) {
+    for (const name of Object.getOwnPropertyNames(proto)) {
+      const d = Object.getOwnPropertyDescriptor(proto, name);
+      if (typeof d?.value !== 'function') continue;
+      const src = d.value.toString();
+      if (src.includes('playbackRangeHighlightChanged') && src.includes('.clear()') && src.includes('findBeat(')) {
+        const fn = d.value;
+        api[name] = function (...args) { try { return fn.apply(this, args); } catch { /* layout not ready */ } };
+      }
+    }
+  }
 }
 
 // alphaTab 1.8.4 bug: AlphaSynthWebWorkerApi's `loadedMidiInfo` getter returns itself (infinite recursion),

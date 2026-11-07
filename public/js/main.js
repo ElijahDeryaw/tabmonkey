@@ -36,7 +36,7 @@ function route() {
   } else {
     leaveSong();
     document.body.dataset.screen = 'library';
-    document.title = 'Tabs';
+    document.title = 'TabMonkey';
     library.render(h.get('set') ? { kind: 'set', id: h.get('set') } : { kind: 'songs' }, opts);
   }
 }
@@ -103,6 +103,8 @@ async function openSong(id, setId, { fresh = false } = {}) {
   if (id === app.songId && !fresh) { drawHeader(); return; }
   if (api && app.playing) api.stop();
   closeSpot(false);
+  // Drop the previous song's loop range, or alphaTab tries to draw it on the new song before it's laid out.
+  if (api) { api.isLooping = false; api.playbackRange = null; api.clearPlaybackRangeHighlight(); }
   loading('Loading');
   let info;
   try {
@@ -131,6 +133,19 @@ async function openSong(id, setId, { fresh = false } = {}) {
 
   if (!api) createApi();
   api.load(`/api/song/${id}/score.gp`);
+  watchLoad(id);
+}
+
+// Never leave the loading overlay up forever: retry the load once, then give up with a message.
+let loadWatch = null;
+function watchLoad(id, retried = false) {
+  clearTimeout(loadWatch);
+  loadWatch = setTimeout(() => {
+    if (app.songId !== id || $('loading').hidden) return;
+    if (!retried) { console.warn('Score load stalled, retrying'); api.load(`/api/song/${id}/score.gp`); watchLoad(id, true); return; }
+    loading(null);
+    toast('This song is taking too long to draw. Try reloading the page.');
+  }, 15000);
 }
 
 const mainTrack = () => app.info.tracks[[...app.selected][0]];
@@ -199,13 +214,16 @@ function createApi() {
   player.updateDisplay({ theme: theme().settings, scale: effectiveScale() });
   window.tabApi = api; // for debugging in the console
   api.scoreLoaded.on((score) => {
-    // Guitar Pro stores key signatures per master bar, so drum staves inherit the song key on import.
-    for (const t of score.tracks) for (const st of t.staves) if (st.isPercussion) for (const b of st.bars) b.keySignature = 0;
-    app.sections = buildSections(score);
-    drawMap();
+    try {
+      // Guitar Pro stores key signatures per master bar, so drum staves inherit the song key on import.
+      for (const t of score.tracks) for (const st of t.staves) if (st.isPercussion) for (const b of st.bars) b.keySignature = 0;
+      app.sections = buildSections(score);
+      drawMap();
+    } catch (e) { console.error(e); } // a problem with the song map must never stop the sheet from drawing
     player.render(scoreTracks(), yourView());
   });
   api.renderFinished.on(() => loading(null));
+  api.postRenderFinished.on(() => loading(null));
   // Layout bounds exist only after this: resume the last loop, or redraw its highlight for the new layout.
   api.postRenderFinished.on(() => {
     if (!app.ready.render) { app.ready.render = true; maybeResume(); }

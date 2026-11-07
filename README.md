@@ -1,4 +1,4 @@
-# Tabs
+# TabMonkey
 
 A tab app for a band. It keeps your band's songs and setlists in one place and opens each song on your part. It is built for four situations:
 

@@ -110,7 +110,8 @@ body[data-screen="library"] #library, body[data-screen="song"] #song { display: 
 /* ================= Library ================= */
 #library { grid-template-rows: auto 1fr; }
 /* wordmark width puts the search box on the same left edge as the page content (sidebar 228 + page padding 32) */
-.wordmark { font-weight: 600; font-size: 15px; letter-spacing: -0.02em; color: var(--text); text-decoration: none; padding: 0 8px; width: 240px; flex: none; }
+.wordmark { display: flex; align-items: center; color: var(--text); text-decoration: none; padding: 0 8px 0 4px; width: 240px; flex: none; }
+.wordmark .logo { height: 34px; width: auto; display: block; overflow: visible; }
 .search { position: relative; flex: 1; max-width: 520px; }
 .search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-3); pointer-events: none; }
 .search input { width: 100%; height: var(--h); padding: 0 34px; border: 1px solid transparent; border-radius: var(--r); background: var(--hover); outline: none; }
