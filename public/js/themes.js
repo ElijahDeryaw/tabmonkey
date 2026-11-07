@@ -2,11 +2,12 @@
 // Guitar Pro look. Each has a light and a dark sheet, drawn natively (no color inversion).
 //
 // Comfort's readability choices:
-// - Tab numbers in Atkinson Hyperlegible Bold (designed for low-vision legibility: 0/8, 1/7, 3/8, 5/6 stay distinct).
+// - Tab numbers in Atkinson Hyperlegible Next at semibold (600; see styles.css): heavy enough to read at a glance,
+//   light enough that the counters of 0, 6, 8 and 9 stay open. Designed for low-vision legibility.
 // - Ink is high contrast against the paper; staff lines are deliberately lighter so the numbers carry the eye.
 // - Off-white "paper" and off-black dark sheet, so neither glares.
 // - More room between systems and a slightly larger scale, so the eye finds the next line quickly.
-const HYPER = ['Atkinson Hyperlegible', 'Verdana', 'sans-serif'];
+const HYPER = ['Atkinson Hyperlegible Next', 'Verdana', 'sans-serif'];
 const font = (families, size, weight = 'Regular', style = 'Plain') => ({ families, size, weight, style });
 
 const PALETTES = {
@@ -73,7 +74,7 @@ export async function loadThemeFonts(name) {
   if (name !== 'comfort' || !document.fonts) return;
   try {
     await Promise.all([
-      document.fonts.load(`700 15px "${HYPER[0]}"`),
+      document.fonts.load(`600 15px "${HYPER[0]}"`),
       document.fonts.load(`400 12px "${HYPER[0]}"`),
       document.fonts.load(`italic 400 12px "${HYPER[0]}"`),
     ]);

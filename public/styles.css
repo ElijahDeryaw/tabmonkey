@@ -240,7 +240,9 @@ body[data-screen="library"] #library, body[data-screen="song"] #song { display: 
 .spinner { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--line-strong); border-top-color: var(--text-2); animation: spin .7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* alphaTab */
+/* alphaTab. alphaTab fonts can only be regular or bold; Comfort's tab digits read best at semibold, where
+   0 and 8 keep open counters. Override the weight of the SVG text it emits (alphaTab sets the font inline). */
+.sheet text[style*="Atkinson"][style*="bold"] { font-weight: 600 !important; }
 .at-cursor-bar { background: rgb(232 89 12 / .07); }
 .at-cursor-beat { background: var(--accent); width: 2px; }
 .at-selection div { background: rgb(232 89 12 / .12); }

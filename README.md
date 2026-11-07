@@ -32,7 +32,7 @@ One person hosts it, and everyone else opens it in a browser. A home machine beh
 - **You / Band faders.** Bring yourself down to play along, or bring the band down to hear only your part. Vocal guide lines never play, because a synth voice isn't a singer. With **Click** on, the click is boosted and the band is ducked under it, so the click is always the loudest thing you hear.
 - **Song switcher** (`S`, or tap the song title): your setlist and songs appear right away; type to filter, or to find anything on Songsterr.
 - **View menu** (`Aa`). Theme, notation (tab, tab + staff, staff), page or single-line layout, sheet size, and light or dark sheet.
-  - **Comfort** (the default) is built for reading at a glance: tab digits are set in bold Atkinson Hyperlegible, a typeface designed for low vision that keeps 0/8, 1/7 and 5/6 distinct. Ink is high contrast, staff lines are lighter so the numbers lead, the paper is warm rather than glaring white, and there's more space between lines of music.
+  - **Comfort** (the default) is built for reading at a glance: tab digits are set in semibold Atkinson Hyperlegible Next, a typeface designed for low vision that keeps 0/8, 1/7 and 5/6 distinct. Ink is high contrast, staff lines are lighter so the numbers lead, the paper is warm rather than glaring white, and there's more space between lines of music.
   - **Classic** is the familiar Guitar Pro look.
 - **Stage mode** (`F`). Goes full screen and keeps only the sheet, the song map, play, and setlist navigation. Page-turner pedals that send PageDown/PageUp scroll the sheet.
 
