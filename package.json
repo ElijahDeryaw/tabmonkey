@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "description": "Band practice tab viewer for Songsterr tabs",
   "scripts": {
-    "start": "node server.js",
+    "start": "node scripts/start.js",
+    "serve": "node server.js",
     "soundfont": "node scripts/fetch-soundfont.js"
   },
   "keywords": [],

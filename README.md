@@ -14,10 +14,15 @@ Tab data comes from Songsterr's public endpoints (the approach is the same as [s
 ```sh
 npm install
 npm run soundfont   # one-time ~32 MB download of GeneralUser GS (free to use) for playback
-npm start           # http://localhost:3000  (PORT and HOST env vars are respected)
+npm start           # the app + a temporary Cloudflare tunnel; prints a public https link
 ```
 
-One person hosts it, and everyone else opens it in a browser. A home machine behind a [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) works well: `cloudflared tunnel --url http://localhost:3000`. Anyone with the URL can edit the band's songs and setlists, so put the tunnel behind Cloudflare Access (or similar) if the URL could leak. Over HTTPS, stage mode also keeps phones and tablets awake.
+`npm start` serves the app on port 3000 and shares it through a Cloudflare quick tunnel. Open the printed `https://….trycloudflare.com` link on a phone or tablet. HTTPS also lets stage mode keep the screen awake. The link changes each time you start. Ctrl+C stops both.
+
+- **cloudflared** is found on PATH, or inside WSL on Windows. If it isn't installed, the app still runs on your network only.
+- **Your own Cloudflare setup** (`~/.cloudflared/config.yml`) is left alone: the quick tunnel runs with an empty config.
+- **Anyone with the link** can edit the band's songs and setlists. Share it with your band only, or put a named tunnel behind Cloudflare Access.
+- **`npm run serve`** (or `TUNNEL=0 npm start`) runs the app without the tunnel. `PORT` and `HOST` are respected.
 
 `deploy/musicvisualize.service` is a systemd unit if the host runs Linux.
 
