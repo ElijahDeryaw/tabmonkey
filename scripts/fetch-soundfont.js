@@ -1,13 +1,14 @@
-// Downloads MuseScore_General.sf3 (MIT licensed, ~38 MB) used for playback. Run once: npm run soundfont
+// Downloads GeneralUser GS (SF2, ~32 MB, free to use and redistribute) used for playback. Run once: npm run soundfont
+// SF2 on purpose: alphaTab 1.8.4's Vorbis decoder produces NaN on some SF3 samples, which silences playback.
 import fs from 'node:fs';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 
-const URL = 'https://ftp.osuosl.org/pub/musescore/soundfont/MuseScore_General/MuseScore_General.sf3';
+const URL = 'https://raw.githubusercontent.com/mrbumpy409/GeneralUser-GS/main/GeneralUser-GS.sf2';
 const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'soundfonts');
-const out = path.join(dir, 'MuseScore_General.sf3');
+const out = path.join(dir, 'GeneralUser-GS.sf2');
 
 if (fs.existsSync(out)) { console.log(`Already present: ${out}`); process.exit(0); }
 fs.mkdirSync(dir, { recursive: true });

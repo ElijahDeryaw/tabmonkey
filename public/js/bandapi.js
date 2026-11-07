@@ -23,7 +23,11 @@ export const addSong = (s) => call('POST', '/api/band/songs', { songId: s.songId
 export const removeSong = (id) => call('DELETE', `/api/band/songs/${id}`);
 export async function createSetlist(name) { const r = await call('POST', '/api/band/setlists', { name }); return r.created; }
 export const renameSetlist = (id, name) => call('PATCH', `/api/band/setlists/${id}`, { name });
-export const setSetlistSongs = (id, songIds) => call('PATCH', `/api/band/setlists/${id}`, { songIds });
+export function setSetlistSongs(id, songIds) {
+  const l = setlist(id);
+  if (l) l.songIds = [...songIds]; // optimistic: the UI already shows the new order
+  return call('PATCH', `/api/band/setlists/${id}`, { songIds });
+}
 export const deleteSetlist = (id) => call('DELETE', `/api/band/setlists/${id}`);
 
 export async function toggleInSetlist(id, song) {

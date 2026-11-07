@@ -5,7 +5,7 @@ import { isDrumTrack, roleOf, partNames, isLowToHigh } from './tracks.js';
 const M = alphaTab.model;
 
 /** Bump when conversion output changes, so cached .gp files on disk are rebuilt. */
-export const CONVERTER_VERSION = 3;
+export const CONVERTER_VERSION = 6;
 
 const SLIDE_OUT = {
   shift: M.SlideOutType.Shift,
@@ -142,7 +142,10 @@ export function songsterrToScore(meta, parts) {
       const tuning = part.tuning || [64, 59, 55, 50, 45, 40];
       staff.stringTuning = new M.Tuning('', flip ? [...tuning].reverse() : tuning, false);
       if (part.capo) staff.capo = part.capo;
-      track.playbackInfo.program = mix[pi].program ?? part.instrumentId ?? 25;
+      const program = mix[pi].program ?? part.instrumentId ?? 25;
+      // GM 97 (FX Soundtrack) makes alphaTab's synth emit NaN with GeneralUser GS, which silences every track;
+      // 101 (FX Goblins) is silent. Both are rare; play them as a warm pad instead.
+      track.playbackInfo.program = program === 97 || program === 101 ? 89 : program;
       track.playbackInfo.primaryChannel = nextChannel();
       track.playbackInfo.secondaryChannel = nextChannel();
     }
@@ -242,8 +245,10 @@ export function songsterrToScore(meta, parts) {
           }
         }
         if (!voice.beats.length) {
+          // Filler for voices a bar doesn't use. Mark it empty so it isn't drawn as a stray rest in the tab.
           const rest = new M.Beat();
           rest.duration = M.Duration.Whole;
+          rest.isEmpty = vi > 0;
           voice.addBeat(rest);
         }
       });

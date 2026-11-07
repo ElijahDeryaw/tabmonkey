@@ -13,13 +13,22 @@ const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0'; // reachable on the LAN or through a tunnel
 const ALPHATAB = path.join(ROOT, 'node_modules/@coderline/alphatab/dist');
-const SOUNDFONT = [path.join(ROOT, 'soundfonts/MuseScore_General.sf3'), path.join(ALPHATAB, 'soundfont/sonivox.sf2')].find(existsSync);
+// GeneralUser GS (SF2, uncompressed). SF3 fonts like MuseScore_General hit a Vorbis decoding bug in alphaTab 1.8.4
+// that outputs NaN for many instruments (pianos among them), silencing the whole mix.
+const SOUNDFONT = [path.join(ROOT, 'soundfonts/GeneralUser-GS.sf2'), path.join(ALPHATAB, 'soundfont/sonivox.sf2')].find(existsSync);
 
 const app = express();
 // App files revalidate each load (cheap 304s); alphaTab and the soundfont are big and versioned, so cache them hard.
 app.use(express.static(path.join(ROOT, 'public'), { maxAge: 0 }));
 app.use('/alphatab', express.static(ALPHATAB, { maxAge: '30d' }));
-app.get('/soundfont', (req, res) => res.sendFile(SOUNDFONT, { maxAge: '30d', headers: { 'Content-Type': 'application/octet-stream' } }));
+// /soundfont redirects (uncached) to a file-specific URL that browsers may cache for a long time,
+// so switching soundfonts takes effect immediately.
+// (`/soundfont` itself was once served with a 30-day cache, so clients use `/api/soundfont`.)
+app.get(['/api/soundfont', '/soundfont'], (req, res) => { res.set('Cache-Control', 'no-store'); res.redirect(302, `/soundfont/${path.basename(SOUNDFONT)}`); });
+app.get('/soundfont/:name', (req, res) => {
+  if (req.params.name !== path.basename(SOUNDFONT)) return res.status(404).end();
+  res.sendFile(SOUNDFONT, { maxAge: '365d', immutable: true, headers: { 'Content-Type': 'application/octet-stream' } });
+});
 
 const wrap = (fn) => (req, res) =>
   fn(req, res).catch((err) => {

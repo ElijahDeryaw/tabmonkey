@@ -195,32 +195,99 @@ function addToSetMenu(anchor, l) {
   });
 }
 
-// Drag rows by their grip to reorder (pointer events, so it works with touch too).
+// Reordering: press a row's grip and the row lifts and follows the pointer; the others slide out of the way;
+// on release it settles into its slot. Works with mouse, touch and pen. Alt+↑/↓ does the same from the keyboard.
 function enableReorder(l) {
   const box = $('set-rows');
   if (!box) return;
+  const scroller = $('lib-main');
+  const ease = 'cubic-bezier(.2,.8,.2,1)';
+
   box.addEventListener('pointerdown', (e) => {
     const grip = e.target.closest('.grip');
-    if (!grip) return;
+    if (!grip || e.button > 0) return;
     e.preventDefault();
     const row = grip.closest('.row');
-    row.classList.add('dragging');
+    const rows = [...box.querySelectorAll('.row[data-id]')];
+    const from = rows.indexOf(row);
+    const tops = rows.map((r) => r.offsetTop);
+    const slot = rows.length > 1 ? tops[1] - tops[0] : row.offsetHeight;
+    const startY = e.clientY, startScroll = scroller.scrollTop;
+    let pointerY = startY, to = from, raf = 0, scrollRaf = 0, done = false;
+
+    row.classList.add('lifted');
+    box.classList.add('reordering');
+    document.body.classList.add('dragging');
+    navigator.vibrate?.(10);
     grip.setPointerCapture(e.pointerId);
-    const move = (ev) => {
-      const over = [...box.querySelectorAll('.row[data-id]')].find((r) => r !== row && ev.clientY > r.getBoundingClientRect().top && ev.clientY < r.getBoundingClientRect().bottom);
-      if (!over) return;
-      const mid = over.getBoundingClientRect().top + over.offsetHeight / 2;
-      box.insertBefore(row, ev.clientY < mid ? over : over.nextSibling);
+
+    const frame = () => {
+      raf = 0;
+      const min = tops[0] - tops[from], max = tops[rows.length - 1] - tops[from];
+      const dy = Math.max(min - slot * 0.4, Math.min(max + slot * 0.4, pointerY - startY + scroller.scrollTop - startScroll));
+      row.style.transform = `translateY(${dy}px) scale(1.015)`;
+      const next = Math.max(0, Math.min(rows.length - 1, Math.round((tops[from] + dy - tops[0]) / slot)));
+      if (next !== to) {
+        to = next;
+        navigator.vibrate?.(4);
+        rows.forEach((r, i) => {
+          if (r === row) return;
+          const shift = from < to && i > from && i <= to ? -slot : from > to && i < from && i >= to ? slot : 0;
+          r.style.transform = shift ? `translateY(${shift}px)` : '';
+        });
+      }
     };
-    const up = async () => {
+    // Scroll the list when dragging near its top or bottom edge.
+    const autoScroll = () => {
+      scrollRaf = 0;
+      if (done) return;
+      const r = scroller.getBoundingClientRect(), edge = 56;
+      const v = pointerY < r.top + edge ? -(r.top + edge - pointerY) / 4 : pointerY > r.bottom - edge ? (pointerY - (r.bottom - edge)) / 4 : 0;
+      if (v) { scroller.scrollTop += v; if (!raf) raf = requestAnimationFrame(frame); scrollRaf = requestAnimationFrame(autoScroll); }
+    };
+    const move = (ev) => {
+      pointerY = ev.clientY;
+      if (!raf) raf = requestAnimationFrame(frame);
+      if (!scrollRaf) scrollRaf = requestAnimationFrame(autoScroll);
+    };
+    const up = () => {
+      done = true;
       grip.removeEventListener('pointermove', move);
-      row.classList.remove('dragging');
-      const ids = [...box.querySelectorAll('.row[data-id]')].map((r) => Number(r.dataset.id));
-      if (ids.join() !== l.songIds.join()) await bandApi.setSetlistSongs(l.id, ids);
+      cancelAnimationFrame(raf); cancelAnimationFrame(scrollRaf);
+      document.body.classList.remove('dragging');
+      // Settle: animate the lifted row into its slot, then commit the new order to the DOM.
+      row.classList.add('settling');
+      row.style.transform = `translateY(${tops[to] - tops[from]}px)`;
+      const commit = () => {
+        box.classList.remove('reordering');
+        rows.forEach((r) => { r.style.transition = 'none'; r.style.transform = ''; });
+        row.classList.remove('lifted', 'settling');
+        const order = rows.filter((r) => r !== row);
+        order.splice(to, 0, row);
+        order.forEach((r) => box.append(r));
+        order.forEach((r, i) => { const n = r.querySelector('.idx'); if (n) n.textContent = i + 1; });
+        requestAnimationFrame(() => rows.forEach((r) => { r.style.transition = ''; }));
+        if (to !== from) bandApi.setSetlistSongs(l.id, order.map((r) => Number(r.dataset.id)));
+      };
+      let committed = false;
+      const once = () => { if (!committed) { committed = true; commit(); } };
+      row.addEventListener('transitionend', once, { once: true });
+      setTimeout(once, 260);
     };
     grip.addEventListener('pointermove', move);
     grip.addEventListener('pointerup', up, { once: true });
     grip.addEventListener('pointercancel', up, { once: true });
+  });
+
+  box.addEventListener('keydown', (e) => {
+    if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+    const row = e.target.closest('.row[data-id]');
+    if (!row) return;
+    e.preventDefault();
+    const ids = [...l.songIds], id = Number(row.dataset.id), i = ids.indexOf(id), j = i + (e.key === 'ArrowUp' ? -1 : 1);
+    if (j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    bandApi.setSetlistSongs(l.id, ids).then(() => box.querySelector(`.row[data-id="${id}"]`)?.focus());
   });
 }
 

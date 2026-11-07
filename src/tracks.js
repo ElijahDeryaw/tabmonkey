@@ -5,7 +5,7 @@
 const PART_VOCAB = new Set(('lead rhythm backing main vocal vocals voice voices choir harmony harmonies guitar guitars bass drums drum kit ' +
   'percussion loop loops claps hand keys keyboard keyboards piano synth synths organ pad pads solo string strings horn horns brass sax ' +
   'trumpet violin cello banjo mandolin ukulele harmonica acoustic electric clean distorted extra extras overdub overdubs fx effects ' +
-  'left right double doubled 12-string high low part').split(' '));
+  'left right l r lh rh double doubled 12-string high low part').split(' '));
 const isPartName = (seg) => seg.toLowerCase().replace(/[()]/g, ' ').split(/\s+/).filter(Boolean).every((w) => PART_VOCAB.has(w) || /^\d+$/.test(w));
 const ROLE_LABEL = { drums: 'Drums', vocals: 'Vocals', bass: 'Bass', guitar: 'Guitar', keys: 'Keys' };
 

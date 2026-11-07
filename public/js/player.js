@@ -23,7 +23,7 @@ export function create(el, scrollEl, { scale, layout, view }) {
     },
     player: {
       playerMode: alphaTab.PlayerMode.EnabledSynthesizer,
-      soundFont: '/soundfont',
+      soundFont: '/api/soundfont',
       scrollElement: scrollEl,
       scrollOffsetY: -60,
       enableCursor: true,
@@ -102,12 +102,31 @@ export function render(tracks, view) {
   api.renderTracks(tracks);
 }
 
-export function updateDisplay({ scale, layout }) {
+/**
+ * Apply a theme ({ display: { systemPadding…, resources: { colors, fonts, engravingSettings } } }) directly on the
+ * live settings objects. (Settings.fillFromJson expects alphaTab's internal Map form, not plain objects.)
+ */
+function applyTheme(theme) {
+  const d = api.settings.display, src = theme.display ?? {};
+  for (const [k, v] of Object.entries(src)) {
+    if (k === 'resources') continue;
+    d[k] = v;
+  }
+  const res = d.resources;
+  for (const [k, v] of Object.entries(src.resources ?? {})) {
+    if (k === 'engravingSettings') Object.assign(res.engravingSettings, v);
+    else if (typeof v === 'string') res[k] = alphaTab.model.Color.fromJson(v);
+    else res[k] = alphaTab.model.Font.withFamilyList(v.families, v.size, alphaTab.model.FontStyle[v.style], alphaTab.model.FontWeight[v.weight]);
+  }
+}
+
+export function updateDisplay({ scale, layout, theme }) {
   if (!api) return;
+  if (theme) applyTheme(theme);
   if (scale) api.settings.display.scale = scale;
   if (layout) api.settings.display.layoutMode = alphaTab.LayoutMode[layout];
   api.updateSettings();
-  api.render();
+  if (api.score) api.render();
 }
 
 const firstBeat = (bar) => bar?.voices[0]?.beats[0] ?? null;

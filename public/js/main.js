@@ -7,6 +7,8 @@ import * as library from './library.js';
 import { INSTRUMENTS, pickTrack, describeTuning } from './instruments.js';
 import { buildSections, sectionAt, spotFor } from './sections.js';
 import { $, esc, icon, toast, popover, closePopover, popoverOpen } from './ui.js';
+import { THEMES, sheetTheme, loadThemeFonts } from './themes.js';
+import { openSwitcher } from './switcher.js';
 
 const fmt = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 const DEFAULT_VIEW = { guitar: 'tab', bass: 'tab', drums: 'notation', vocals: 'notation', keys: 'notation', other: 'both' };
@@ -187,9 +189,14 @@ const yourView = () => store.pref(`view:${roleOfMain()}`, DEFAULT_VIEW[roleOfMai
 const scoreTracks = () => [...app.selected].sort((a, b) => a - b).map((i) => api?.score?.tracks[app.scoreIndexOf[i]]).filter(Boolean);
 const autoZoom = () => { const w = innerWidth; return w < 500 ? 0.8 : w < 900 ? 0.95 : w > 1600 ? 1.1 : 1; };
 const zoomLevel = () => store.device('zoom', autoZoom());
+const themeName = () => store.device('theme', 'comfort');
+const sheetDark = () => store.device('sheet', prefersDark ? 'dark' : 'light') === 'dark';
+const theme = () => sheetTheme(themeName(), sheetDark());
+const effectiveScale = () => Math.round(zoomLevel() * theme().scaleFactor * 100) / 100;
 
 function createApi() {
-  api = player.create($('sheet'), $('viewport'), { scale: zoomLevel(), layout: store.device('layout', 'Page'), view: yourView() });
+  api = player.create($('sheet'), $('viewport'), { scale: effectiveScale(), layout: store.device('layout', 'Page'), view: yourView() });
+  player.updateDisplay({ theme: theme().settings, scale: effectiveScale() });
   window.tabApi = api; // for debugging in the console
   api.scoreLoaded.on((score) => {
     // Guitar Pro stores key signatures per master bar, so drum staves inherit the song key on import.
@@ -377,12 +384,15 @@ function setSpeed(v, persist = true) {
   if (persist && app.songId) store.updateSong(app.songId, { speed: app.speed });
 }
 
+// The click must cut through: it's driven above unity and the band is ducked under it while it's on.
+const CLICK_GAIN = 2.5, DUCK_UNDER_CLICK = 0.5;
 function applyToggles() {
   const count = store.pref('countIn', true), click = store.pref('metronome', false);
-  if (api) { api.countInVolume = count ? 1 : 0; api.metronomeVolume = click ? 1 : 0; }
+  if (api) { api.countInVolume = count ? CLICK_GAIN : 0; api.metronomeVolume = click ? CLICK_GAIN : 0; }
   $('t-count').setAttribute('aria-pressed', String(count));
   $('t-click').setAttribute('aria-pressed', String(click));
   syncLoopMode();
+  applyMix();
 }
 const toggleCount = () => { store.setPref('countIn', !store.pref('countIn', true)); applyToggles(); };
 const toggleClick = () => { store.setPref('metronome', !store.pref('metronome', false)); applyToggles(); };
@@ -412,7 +422,8 @@ function applyMix() {
   if (!api?.score || !app.info) return;
   const mine = new Set(scoreTracks().map((t) => t.index));
   const silent = new Set(app.info.tracks.filter((t) => t.role === 'vocals' && t.loaded).map((t) => app.scoreIndexOf[t.index]));
-  player.applyMix(mixMe() / 100, mixBand() / 100, mine, silent);
+  const duck = store.pref('metronome', false) ? DUCK_UNDER_CLICK : 1;
+  player.applyMix((mixMe() / 100) * duck, (mixBand() / 100) * duck, mine, silent);
 }
 function onFader(e) {
   const el = e.target;
@@ -487,9 +498,10 @@ function changeParts() {
 const VIEWS = [['tab', 'Tab'], ['both', 'Tab + staff'], ['notation', 'Staff']];
 $('view-btn').onclick = () => {
   popover($('view-btn'), () => {
-    const v = yourView(), l = store.device('layout', 'Page'), dark = document.body.classList.contains('dark-sheet');
+    const v = yourView(), l = store.device('layout', 'Page'), dark = sheetDark();
     const seg = (name, items, cur) => `<div class="seg" role="radiogroup">${items.map(([k, label]) => `<button role="radio" data-${name}="${k}" aria-checked="${k === cur}">${label}</button>`).join('')}</div>`;
     return `
+      <div class="menu-row"><span>Theme</span>${seg('theme', THEMES, themeName())}</div>
       <div class="menu-row"><span>Notation</span>${seg('view', VIEWS, v)}</div>
       <div class="menu-row"><span>Layout</span>${seg('layout', [['Page', 'Page'], ['Horizontal', 'One line']], l)}</div>
       <div class="menu-row"><span>Size</span><div class="stepper">
@@ -505,15 +517,23 @@ $('view-btn').onclick = () => {
       if (b.dataset.layout) { store.setDevice('layout', b.dataset.layout); rerender(() => player.updateDisplay({ layout: b.dataset.layout })); }
       if (b.dataset.zoom) zoom(Number(b.dataset.zoom));
       if (b.dataset.sheet) { store.setDevice('sheet', b.dataset.sheet); applySheet(); }
+      if (b.dataset.theme) { store.setDevice('theme', b.dataset.theme); applySheet(); }
       m.redraw();
     },
   });
 };
-function applySheet() { document.body.classList.toggle('dark-sheet', store.device('sheet', prefersDark ? 'dark' : 'light') === 'dark'); }
+/** Paper color + alphaTab colors/fonts/line weights for the current theme; dark sheets are drawn natively. */
+async function applySheet() {
+  const t = theme();
+  document.documentElement.style.setProperty('--paper', t.paper);
+  if (!api) return;
+  await loadThemeFonts(themeName());
+  rerender(() => player.updateDisplay({ theme: t.settings, scale: effectiveScale() }));
+}
 function zoom(d) {
   const z = Math.round(Math.max(0.5, Math.min(2, zoomLevel() + d)) * 100) / 100;
   store.setDevice('zoom', z);
-  rerender(() => player.updateDisplay({ scale: z }));
+  rerender(() => player.updateDisplay({ scale: effectiveScale() }));
 }
 $('viewport').addEventListener('wheel', (e) => { if (e.ctrlKey) { e.preventDefault(); zoom(e.deltaY < 0 ? 0.05 : -0.05); } }, { passive: false });
 
@@ -522,6 +542,20 @@ function rerender(draw = () => player.render(scoreTracks(), yourView())) {
   if (app.spot) api.clearPlaybackRangeHighlight();
   draw();
 }
+
+// ---------- song switcher: tap the title to jump to another song without leaving
+function switchSong() {
+  if (!app.info) return;
+  openSwitcher($('song-switch'), {
+    currentId: app.songId,
+    setId: app.setId,
+    onPick: (id) => {
+      const l = app.setId && bandApi.setlist(app.setId);
+      navigate(l && l.songIds.includes(id) ? `song=${id}&set=${l.id}` : `song=${id}`);
+    },
+  });
+}
+$('song-switch').onclick = switchSong;
 
 // ---------- more menu
 $('more-btn').onclick = () => {
@@ -576,6 +610,7 @@ document.addEventListener('keydown', (e) => {
     n: () => stepSet(1),
     p: () => stepSet(-1),
     f: () => toggleStage(),
+    s: switchSong,
   };
   const fn = actions[e.key] ?? actions[e.key.toLowerCase()];
   if (fn) { e.preventDefault(); fn(); }
@@ -583,6 +618,7 @@ document.addEventListener('keydown', (e) => {
 
 // ================= boot =================
 await store.init();
+await loadThemeFonts(themeName());
 applySheet();
 drawWho();
 library.init({ navigate });

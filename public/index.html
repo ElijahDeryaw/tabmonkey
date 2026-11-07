@@ -11,7 +11,7 @@
 <link rel="apple-touch-icon" href="/icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="/styles.css">
 </head>
 <body data-screen="library">
@@ -65,7 +65,7 @@
 <div id="song" class="screen">
   <header class="bar songbar">
     <button class="btn ghost back" id="back"><svg class="i"><use href="#i-chev-left"/></svg><span id="back-label">Songs</span></button>
-    <div class="song-id"><span id="s-title"></span><span id="s-artist"></span></div>
+    <button class="song-id" id="song-switch" title="Switch song (S)" aria-haspopup="dialog"><span id="s-title"></span><span id="s-artist"></span><svg class="i"><use href="#i-chev-down"/></svg></button>
     <button class="btn part" id="part-btn" aria-haspopup="menu"><span id="part-name"></span><span id="part-meta" class="meta"></span><svg class="i"><use href="#i-chev-down"/></svg></button>
     <div class="grow"></div>
     <div class="setnav" id="setnav" hidden>
