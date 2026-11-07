@@ -5,7 +5,7 @@ import { isDrumTrack, roleOf, partNames, isLowToHigh } from './tracks.js';
 const M = alphaTab.model;
 
 /** Bump when conversion output changes, so cached .gp files on disk are rebuilt. */
-export const CONVERTER_VERSION = 6;
+export const CONVERTER_VERSION = 7;
 
 const SLIDE_OUT = {
   shift: M.SlideOutType.Shift,
@@ -269,7 +269,46 @@ export function songsterrToScore(meta, parts) {
   score.finish(settings);
   // applyLyrics walks beat.nextBeat, which only exists after finish()
   for (const [track, lyrics] of pendingLyrics) track.applyLyrics(lyrics);
+  shareLyrics(score, pendingLyrics.map(([t]) => t), metaTracks);
   return score;
+}
+
+/**
+ * Put the vocal line's lyrics under every other part too, so anyone can see where the words fall.
+ * Each syllable keeps its exact timing: it goes on the beat (voice 1) of the other part that is sounding at that
+ * moment; syllables that land on the same long note are joined.
+ */
+function shareLyrics(score, lyricTracks, metaTracks) {
+  if (!lyricTracks.length) return;
+  const roleOfTrack = (t) => roleOf(metaTracks.find((m, i) => names[i] === t.name) ?? {});
+  const names = partNames(metaTracks);
+  // Prefer the lead vocal line as the source.
+  const source = lyricTracks.find((t) => /lead/i.test(t.name)) ?? lyricTracks[0];
+  const syllables = [];
+  for (const bar of source.staves[0].bars) for (const v of bar.voices) for (const b of v.beats)
+    if (b.lyrics?.some((l) => l && l.trim())) syllables.push({ tick: b.absolutePlaybackStart, lines: b.lyrics });
+  if (!syllables.length) return;
+  syllables.sort((a, b) => a.tick - b.tick);
+
+  for (const track of score.tracks) {
+    if (lyricTracks.includes(track) || roleOfTrack(track) === 'vocals') continue;
+    const beats = [];
+    for (const bar of track.staves[0].bars) for (const b of bar.voices[0]?.beats ?? []) if (!b.isEmpty) beats.push(b);
+    let i = 0;
+    for (const syl of syllables) {
+      while (i < beats.length - 1 && beats[i + 1].absolutePlaybackStart <= syl.tick) i++;
+      const b = beats[i];
+      if (!b || syl.tick < b.absolutePlaybackStart || syl.tick >= b.absolutePlaybackStart + b.playbackDuration) continue;
+      b.lyrics ??= [];
+      syl.lines.forEach((text, line) => {
+        if (!text || !text.trim()) return;
+        while (b.lyrics.length <= line) b.lyrics.push('');
+        // Join: a syllable ending in "-" continues the word, otherwise separate words with a space.
+        const prev = b.lyrics[line];
+        b.lyrics[line] = !prev ? text : prev.endsWith('-') ? prev.slice(0, -1) + text : `${prev} ${text}`;
+      });
+    }
+  }
 }
 
 /**

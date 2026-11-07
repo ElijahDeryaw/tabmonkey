@@ -39,8 +39,9 @@ export function popover(anchor, render, { align = 'start', onClick, className = 
   anchor.setAttribute('aria-expanded', 'true');
   if (matchWidth) el.style.width = `${anchor.getBoundingClientRect().width}px`;
   place(el, anchor, align);
-  el.addEventListener('click', (e) => onClick?.(e, { redraw: () => { draw(); place(el, anchor, align); }, close: closePopover }));
-  el.addEventListener('input', (e) => onClick?.(e, { redraw: draw, close: closePopover }));
+  const redraw = () => { draw(); place(el, anchor, align); }; // content can grow; keep it on screen
+  el.addEventListener('click', (e) => onClick?.(e, { redraw, close: closePopover }));
+  el.addEventListener('input', (e) => onClick?.(e, { redraw, close: closePopover }));
   return current;
 }
 

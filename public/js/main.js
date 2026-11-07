@@ -9,6 +9,7 @@ import { buildSections, sectionAt, spotFor } from './sections.js';
 import { $, esc, icon, toast, popover, closePopover, popoverOpen } from './ui.js';
 import { THEMES, sheetTheme, loadThemeFonts } from './themes.js';
 import { openSwitcher } from './switcher.js';
+import * as retune from './retune.js';
 
 const fmt = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 const DEFAULT_VIEW = { guitar: 'tab', bass: 'tab', drums: 'notation', vocals: 'notation', keys: 'notation', other: 'both' };
@@ -161,8 +162,12 @@ function loading(msg) { $('loading').hidden = !msg; if (msg) $('loading-msg').te
 function drawHeader() {
   if (!app.info) return;
   const t = mainTrack();
-  const tun = describeTuning(t.tuning, t.role);
-  const odd = [tun && !tun.standard ? tun.name : null, t.capo ? `Capo ${t.capo}` : null].filter(Boolean).join(' · ');
+  const staff = api?.score?.tracks[app.scoreIndexOf[t.index]]?.staves[0];
+  const tuning = staff?.tuning?.length ? [...staff.tuning] : t.tuning;
+  const capo = staff ? staff.capo : t.capo;
+  const tun = describeTuning(tuning, t.role);
+  const k = songShift();
+  const odd = [k ? `Key ${k > 0 ? '+' : '−'}${Math.abs(k)}` : null, tun && !tun.standard ? tun.name : null, capo ? `Capo ${capo}` : null].filter(Boolean).join(' · ');
   const more = app.selected.size > 1 ? ` + ${app.selected.size - 1}` : '';
   $('part-name').textContent = t.part + more;
   $('part-meta').textContent = odd || (tun ? 'Standard' : '');
@@ -220,16 +225,20 @@ function createApi() {
       app.sections = buildSections(score);
       drawMap();
     } catch (e) { console.error(e); } // a problem with the song map must never stop the sheet from drawing
+    retune.snapshot(score);
+    applyLyricsSetting();
+    applyRetune({ render: false });
     player.render(scoreTracks(), yourView());
+    if (songShift() || tuningChoice()) api.loadMidiForScore(); // playback must use the re-fingered pitches
   });
   api.renderFinished.on(() => loading(null));
-  api.postRenderFinished.on(() => loading(null));
+  api.postRenderFinished.on(() => { loading(null); drawLabels(); });
   // Layout bounds exist only after this: resume the last loop, or redraw its highlight for the new layout.
   api.postRenderFinished.on(() => {
     if (!app.ready.render) { app.ready.render = true; maybeResume(); }
     else if (app.spot) player.highlightBars(app.spot.start, app.spot.end);
   });
-  api.midiLoaded.on(() => { app.ready.midi = true; applyMix(); maybeResume(); });
+  api.midiLoaded.on(() => { app.ready.midi = true; applyMix(); applyTransposition(); maybeResume(); });
   api.error.on((e) => { loading(null); toast('Could not draw this song'); console.error(e); });
   api.soundFontLoad.on((e) => {
     $('sf').hidden = false;
@@ -507,8 +516,7 @@ $('part-btn').onclick = () => {
 };
 function changeParts() {
   rememberPart();
-  drawHeader();
-  rerender();
+  applyRetune();
   applyMix();
 }
 
@@ -526,7 +534,9 @@ $('view-btn').onclick = () => {
         <button class="btn icon ghost" data-zoom="-0.1" aria-label="Smaller">${icon('minus')}</button>
         <span class="tempo" style="min-width:48px">${Math.round(zoomLevel() * 100)}%</span>
         <button class="btn icon ghost" data-zoom="0.1" aria-label="Larger">${icon('plus')}</button></div></div>
-      <div class="menu-row"><span>Sheet</span>${seg('sheet', [['light', 'Light'], ['dark', 'Dark']], dark ? 'dark' : 'light')}</div>`;
+      <div class="menu-row"><span>Sheet</span>${seg('sheet', [['light', 'Light'], ['dark', 'Dark']], dark ? 'dark' : 'light')}</div>
+      <div class="menu-row"><span>Lyrics</span>${seg('lyrics', [['on', 'Show'], ['off', 'Hide']], lyricsOn() ? 'on' : 'off')}</div>
+      <div class="menu-row"><span>String names</span>${seg('strings', [['on', 'Show'], ['off', 'Hide']], store.pref('stringNames', true) ? 'on' : 'off')}</div>`;
   }, {
     align: 'end',
     onClick: (e, m) => {
@@ -536,6 +546,8 @@ $('view-btn').onclick = () => {
       if (b.dataset.zoom) zoom(Number(b.dataset.zoom));
       if (b.dataset.sheet) { store.setDevice('sheet', b.dataset.sheet); applySheet(); }
       if (b.dataset.theme) { store.setDevice('theme', b.dataset.theme); applySheet(); }
+      if (b.dataset.lyrics) { store.setPref('lyrics', b.dataset.lyrics === 'on'); applyLyricsSetting(); rerender(); }
+      if (b.dataset.strings) { store.setPref('stringNames', b.dataset.strings === 'on'); drawLabels(); }
       m.redraw();
     },
   });
@@ -544,6 +556,7 @@ $('view-btn').onclick = () => {
 async function applySheet() {
   const t = theme();
   document.documentElement.style.setProperty('--paper', t.paper);
+  document.documentElement.style.setProperty('--label-ink', t.soft);
   if (!api) return;
   await loadThemeFonts(themeName());
   rerender(() => player.updateDisplay({ theme: t.settings, scale: effectiveScale() }));
@@ -560,6 +573,114 @@ function rerender(draw = () => player.render(scoreTracks(), yourView())) {
   if (app.spot) api.clearPlaybackRangeHighlight();
   draw();
 }
+
+// ---------- retune: song key (per song) + how your instrument is tuned (per player, persists across songs)
+const songShift = () => (app.songId ? store.song(app.songId).shift ?? 0 : 0);
+const tuningChoice = () => store.pref(`tuning:${roleOfMain()}`, null); // null = tuned like the tab
+const allowCapo = () => store.pref('allowCapo', true);
+const isStringed = (t) => t && !t.staves[0]?.isPercussion && t.staves[0]?.tuning?.length;
+app.retuneStats = null;
+
+/** Re-finger your part(s) for the current key + tuning; everything else is transposed in playback. */
+function applyRetune({ render = true } = {}) {
+  if (!api?.score || !app.info) return;
+  const k = songShift(), choice = tuningChoice(), role = roleOfMain();
+  const mine = new Set(scoreTracks().filter((t) => isStringed(t) && app.info.tracks[app.scoreIndexOf.indexOf(t.index)]?.role === role).map((t) => t.index));
+  let stats = null;
+  for (const t of api.score.tracks) {
+    if (!isStringed(t)) continue;
+    const staff = t.staves[0];
+    if (mine.has(t.index)) {
+      const written = staff._origTuning ?? staff.tuning;
+      const target = retune.tuningFor(choice, role, written.length) ?? written.map((p) => p + k);
+      const s = retune.refret(staff, k, target, { allowCapo: allowCapo() });
+      stats = stats ? { ...s, moved: stats.moved + s.moved, octave: stats.octave + s.octave, dropped: stats.dropped + s.dropped, total: stats.total + s.total } : s;
+    } else retune.restore(staff);
+  }
+  app.retuneStats = stats;
+  app.retuned = mine;
+  $('t-retune').setAttribute('aria-pressed', String(!!(k || choice)));
+  $('t-retune').textContent = k ? `Retune ${k > 0 ? '+' : '−'}${Math.abs(k)}` : 'Retune';
+  drawHeader();
+  if (render) {
+    rerender();
+    api.loadMidiForScore(); // re-fingered notes change pitch; midiLoaded then re-applies mix + transposition
+  }
+}
+
+/** Parts you're not reading follow the key change in playback only. */
+function applyTransposition() {
+  if (!api?.score) return;
+  const k = songShift();
+  for (const t of api.score.tracks) {
+    if (t.staves[0]?.isPercussion) continue;
+    api.changeTrackTranspositionPitch([t], app.retuned?.has(t.index) ? 0 : k);
+  }
+}
+
+function retuneMenu() {
+  if (!app.info) return;
+  const role = roleOfMain();
+  const t = scoreTracks()[0];
+  const strings = t?.staves[0]?._origTuning?.length ?? t?.staves[0]?.tuning?.length ?? 6;
+  const opts = retune.tuningOptions(role, strings);
+  const inst = role === 'bass' ? 'bass' : 'guitar';
+  popover($('t-retune'), () => {
+    const k = songShift(), choice = tuningChoice(), st = app.retuneStats;
+    const staff = t?.staves[0];
+    const tun = staff ? describeTuning([...staff.tuning], role) : null;
+    const needs = [tun ? (tun.standard ? 'Standard tuning' : tun.name) : null, staff?.capo ? `capo ${staff.capo}` : null].filter(Boolean).join(', ');
+    const lines = [];
+    if (st && (st.moved || st.octave || st.dropped)) {
+      lines.push(`Re-fingered ${st.moved} note${st.moved === 1 ? '' : 's'}${st.octave ? ` · ${st.octave} moved an octave` : ''}${st.dropped ? ` · ${st.dropped} doubled note${st.dropped === 1 ? '' : 's'} left out` : ''}.`);
+      // When a lot had to move, name the tuning that plays it exactly as written.
+      if ((st.octave + st.dropped) / Math.max(1, st.total) > 0.03 && staff?._origTuning) {
+        const ideal = describeTuning(staff._origTuning.map((p) => p + k), role);
+        if (ideal) lines.push(`Tune to ${ideal.standard ? 'standard' : ideal.name} to play it exactly as written.`);
+      }
+    }
+    const kLabel = k ? `${k > 0 ? '+' : '−'}${Math.abs(k)}` : 'Original';
+    return `
+      <div class="menu-row"><span>Key</span><div class="stepper">
+        <button class="btn icon ghost" data-k="-1" aria-label="Down a semitone">${icon('minus')}</button>
+        <span class="tempo" style="min-width:64px"><span>${kLabel}</span></span>
+        <button class="btn icon ghost" data-k="1" aria-label="Up a semitone">${icon('plus')}</button></div></div>
+      <div class="menu-row"><span>Your ${inst}</span>
+        <select class="mini-select" id="rt-tuning" aria-label="How your ${inst} is tuned" style="height:32px;max-width:190px">
+          <option value="" ${!choice ? 'selected' : ''}>Tuned like the tab</option>
+          ${opts.map((o) => `<option value="${o.key}" ${o.key === choice ? 'selected' : ''}>${o.label}</option>`).join('')}
+        </select></div>
+      <label class="menu-row" style="cursor:pointer"><span>Use a capo if it keeps the shapes</span><input type="checkbox" class="switch" id="rt-capo" ${allowCapo() ? 'checked' : ''}></label>
+      <div class="menu-sep"></div>
+      <div class="note"><b style="color:var(--text);font-weight:600">Play with:</b> ${esc(needs || '—')}${k ? ` · sounds ${Math.abs(k)} semitone${Math.abs(k) === 1 ? '' : 's'} ${k < 0 ? 'lower' : 'higher'}` : ''}</div>
+      ${lines.map((l) => `<div class="note" style="padding-top:0">${esc(l)}</div>`).join('')}
+      ${k || choice ? `<div class="menu-sep"></div><button class="menu-item" data-reset><span class="check"></span>Back to the original</button>` : ''}`;
+  }, {
+    align: 'end',
+    onClick: (e, m) => {
+      const kb = e.target.closest('[data-k]');
+      if (kb && e.type === 'click') {
+        const k = Math.max(-12, Math.min(12, songShift() + Number(kb.dataset.k)));
+        store.updateSong(app.songId, { shift: k });
+        applyRetune(); m.redraw(); return;
+      }
+      if (e.target.id === 'rt-tuning' && e.type === 'input') { store.setPref(`tuning:${roleOfMain()}`, e.target.value || null); applyRetune(); m.redraw(); return; }
+      if (e.target.id === 'rt-capo' && e.type === 'input') { store.setPref('allowCapo', e.target.checked); applyRetune(); m.redraw(); return; }
+      if (e.target.closest('[data-reset]')) { store.updateSong(app.songId, { shift: 0 }); store.setPref(`tuning:${roleOfMain()}`, null); applyRetune(); m.redraw(); }
+    },
+  });
+}
+$('t-retune').onclick = retuneMenu;
+
+// ---------- lyrics + string names
+const lyricsOn = () => store.pref('lyrics', true);
+function applyLyricsSetting() { player.setElement('EffectLyrics', lyricsOn()); }
+const drawLabels = () => {
+  const v = yourView();
+  // Drum staves can't be tab; mirror player.render's fallback so the overlay matches what's drawn.
+  const shown = v === 'tab' && scoreTracks().some((t) => t.staves[0]?.isPercussion) ? 'both' : v;
+  player.drawStringLabels($('sheet'), store.pref('stringNames', true) && shown !== 'notation', shown);
+};
 
 // ---------- song switcher: tap the title to jump to another song without leaving
 function switchSong() {
@@ -629,10 +750,28 @@ document.addEventListener('keydown', (e) => {
     p: () => stepSet(-1),
     f: () => toggleStage(),
     s: switchSong,
+    r: retuneMenu,
   };
   const fn = actions[e.key] ?? actions[e.key.toLowerCase()];
   if (fn) { e.preventDefault(); fn(); }
 });
+
+// ---------- iOS audio: Web Audio is "ambient" by default, so Silent Mode mutes it. Ask for the playback audio
+// session (Safari 17+), or on older iOS start a silent looping <audio> element, which switches the session the same way.
+function unlockAudio() {
+  try { if (navigator.audioSession) { navigator.audioSession.type = 'playback'; return; } } catch { /* ignore */ }
+  if (unlockAudio.el) return;
+  const rate = 8000, samples = 800, buf = new ArrayBuffer(44 + samples * 2), v = new DataView(buf);
+  const w = (o, s) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  w(0, 'RIFF'); v.setUint32(4, 36 + samples * 2, true); w(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  w(36, 'data'); v.setUint32(40, samples * 2, true);
+  const el = new Audio(URL.createObjectURL(new Blob([buf], { type: 'audio/wav' })));
+  el.loop = true; el.setAttribute('playsinline', '');
+  el.play().catch(() => {});
+  unlockAudio.el = el;
+}
+['pointerdown', 'keydown', 'touchend'].forEach((ev) => document.addEventListener(ev, unlockAudio, { capture: true, passive: true }));
 
 // ================= boot =================
 await store.init();

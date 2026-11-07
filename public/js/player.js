@@ -179,6 +179,55 @@ export function clearLoop() {
   api.isLooping = false;
 }
 
+/** Turn an alphaTab notation element (e.g. 'EffectLyrics') on or off; returns true if it changed. */
+export function setElement(name, on) {
+  const els = api?.settings.notation.elements;
+  const key = alphaTab.NotationElement[name];
+  if (!els || els.get(key) === on) return false;
+  els.set(key, on);
+  api.updateSettings();
+  return true;
+}
+
+/**
+ * String names (e B G D A E) to the left of every tab staff, from the staff's actual tuning. alphaTab has no option
+ * for this, so they're drawn as an overlay from its layout bounds after each render.
+ */
+const NOTE_NAMES = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
+export function drawStringLabels(sheetEl, show, view) {
+  let layer = sheetEl.querySelector('.string-labels');
+  if (!layer) { layer = document.createElement('div'); layer.className = 'string-labels'; sheetEl.append(layer); }
+  layer.innerHTML = '';
+  const lookup = api?.boundsLookup;
+  if (!show || !lookup) return;
+  const surface = sheetEl.querySelector('.at-surface');
+  const dx = surface ? surface.offsetLeft : 0, dy = surface ? surface.offsetTop : 0;
+  // Each system lists one bounds box per renderer, in render order: for every shown staff, standard notation
+  // (if shown) then tab. (BarBounds.bar isn't populated in this build, so match by order.)
+  const renderers = [];
+  for (const track of api.tracks ?? []) for (const staff of track.staves) {
+    if (staff.isPercussion) renderers.push(null);
+    else if (view === 'tab') renderers.push(staff);
+    else if (view === 'both') renderers.push(null, staff);
+    else renderers.push(null);
+  }
+  const html = [];
+  for (const system of lookup.staffSystems) {
+    const first = system.bars[0];
+    if (!first || first.bars.length !== renderers.length) continue;
+    first.bars.forEach((bb, i) => {
+      const staff = renderers[i];
+      if (!staff?.tuning?.length) return;
+      const vb = bb.visualBounds, n = staff.tuning.length;
+      const names = staff.tuning.map((m) => NOTE_NAMES[((m % 12) + 12) % 12]);
+      if (names[0] === names[n - 1]) names[0] = names[0].toLowerCase(); // e B G D A E
+      const step = n > 1 ? vb.h / (n - 1) : 0;
+      names.forEach((name, j) => html.push(`<span style="left:${dx + vb.x - 5}px;top:${dy + vb.y + j * step}px">${name}</span>`));
+    });
+  }
+  layer.innerHTML = html.join('');
+}
+
 /** Scroll the sheet so bar i's system is near the top (alphaTab only auto-scrolls while playing). */
 export function scrollToBar(i, scrollEl, sheetEl) {
   const mb = api?.score?.masterBars[i];

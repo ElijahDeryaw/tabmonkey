@@ -32,7 +32,7 @@ export function sheetTheme(name, dark) {
   };
   if (name === 'classic') {
     return {
-      paper: p.paper, scaleFactor: 1,
+      paper: p.paper, soft: p.soft, scaleFactor: 1,
       settings: {
         display: {
           systemPaddingTop: 25, systemPaddingBottom: 15,
@@ -51,7 +51,7 @@ export function sheetTheme(name, dark) {
     };
   }
   return {
-    paper: p.paper, scaleFactor: 1.1,
+    paper: p.paper, soft: p.soft, scaleFactor: 1.1,
     settings: {
       display: {
         systemPaddingTop: 40, systemPaddingBottom: 28,

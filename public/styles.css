@@ -249,6 +249,11 @@ body[data-screen="library"] #library, body[data-screen="song"] #song { display: 
 .at-selection div { background: rgb(232 89 12 / .12); }
 .at-highlight * { fill: var(--accent); stroke: var(--accent); }
 
+/* string names next to the tab lines (positioned from alphaTab's layout) */
+.sheet { position: relative; }
+.string-labels { position: absolute; inset: 0; pointer-events: none; }
+.string-labels span { position: absolute; transform: translate(-100%, -50%); font: 600 11px/1 "Atkinson Hyperlegible Next", var(--font); color: var(--label-ink, #6f6a62); letter-spacing: 0; }
+
 /* practice strip: appears when you're looping something */
 .practice { display: flex; align-items: center; gap: 20px; min-height: 44px; padding: 6px 12px 6px 16px; background: var(--chrome); border-top: 1px solid var(--line); flex-wrap: wrap; }
 .pr-what { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
@@ -339,9 +344,12 @@ body.dragging, body.dragging * { cursor: grabbing !important; user-select: none 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; scroll-behavior: auto !important; }
 }
+/* Increase Contrast (iOS/macOS/Windows): push secondary text and hairlines further, in both color schemes. */
 @media (prefers-contrast: more) {
-  :root { --line: #9a9a92; --line-strong: #6f6f68; --text-2: #2f2f2b; --text-3: #4a4a45; }
-  .btn.ghost, .btn.toggle { border-color: var(--line-strong); }
+  :root { --line: #a8a8a0; --line-strong: #77776f; --text-2: #2f2f2b; --text-3: #4a4a45; }
+}
+@media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+  :root { --line: #45453f; --line-strong: #67675f; --text-2: #dcdcd6; --text-3: #b4b4ad; }
 }
 
 /* ================= Narrow screens ================= */

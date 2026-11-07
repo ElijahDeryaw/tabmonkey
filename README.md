@@ -34,6 +34,12 @@ One person hosts it, and everyone else opens it in a browser. A home machine beh
 - **View menu** (`Aa`). Theme, notation (tab, tab + staff, staff), page or single-line layout, sheet size, and light or dark sheet.
   - **Comfort** (the default) is built for reading at a glance: tab digits are set in semibold Atkinson Hyperlegible Next, a typeface designed for low vision that keeps 0/8, 1/7 and 5/6 distinct. Ink is high contrast, staff lines are lighter so the numbers lead, the paper is warm rather than glaring white, and there's more space between lines of music.
   - **Classic** is the familiar Guitar Pro look.
+- **Lyrics on every part.** The vocal line's syllables appear under whatever part you're reading, at their exact timing, so you can see where the words fall. Toggle them in the view menu.
+- **String names.** Every tab line is labelled with its actual tuning (e B G D A E, or D A D G B E in Drop D). Toggle in the view menu.
+- **Retune** (`R`). **Key** shifts the whole band up or down in semitones and is remembered per song. **Your guitar** says how your instrument is tuned right now, and it stays set across songs, because your guitar stays tuned for half the set.
+  - With "Tuned like the tab", the shapes stay the same and the menu tells you what to tune to. For example, a song at −2 means D standard.
+  - With an explicit tuning, your part is re-fingered for the strings you actually have. If every string is off by the same amount, it moves (or adds) a capo so the shapes stay identical. Otherwise a Viterbi search (the "optimum path" approach to guitar fingering) finds the most playable fingering. It keeps notes near the original tab, minimises hand movement and stretch, keeps hammer-ons, pull-offs and slides on one string, keeps ties in place, and never asks you to bend an open string.
+  - Notes below your lowest string go up an octave as a last resort. The menu tells you when retuning would let you play it as written.
 - **Stage mode** (`F`). Goes full screen and keeps only the sheet, the song map, play, and setlist navigation. Page-turner pedals that send PageDown/PageUp scroll the sheet.
 
 The band library and setlists are stored on the server in `data/band.json`. Practice progress and preferences live in each browser, separately for each player.
@@ -52,6 +58,7 @@ The band library and setlists are stored on the server in `data/band.json`. Prac
 | PageDown / PageUp | Scroll the sheet |
 | F | Stage mode |
 | S | Switch song |
+| R | Retune |
 | / | Search |
 | Esc | Close menu, leave stage mode, stop looping |
 
