@@ -24,6 +24,8 @@
 
   --hover-bg: var(--hover);
   --hover-press: var(--press);
+  /* Layering: the sheet (and everything alphaTab draws into it) is always at the bottom; UI is always on top. */
+  --z-sheet: 0; --z-chrome: 10; --z-loading: 20; --z-menu: 1000; --z-toast: 1100;
   --r: 6px;
   --h: 32px;                /* control height */
   --bar: 52px;
@@ -178,7 +180,7 @@ body[data-screen="library"] #library, body[data-screen="song"] #song { display: 
 .empty .btn { margin-top: 16px; }
 
 /* ================= Menus (popovers) ================= */
-.menu { position: fixed; z-index: 100; min-width: 220px; max-width: min(420px, calc(100vw - 16px)); max-height: min(70vh, 560px); overflow: auto;
+.menu { position: fixed; z-index: var(--z-menu); min-width: 220px; max-width: min(420px, calc(100vw - 16px)); max-height: min(70vh, 560px); overflow: auto;
   padding: 4px; border-radius: 8px; background: var(--chrome); border: 1px solid var(--line-strong); box-shadow: var(--shadow); }
 .menu-label { padding: 8px 8px 4px; font-size: 12px; font-weight: 500; color: var(--text-3); }
 .menu-item { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 6px 8px; border: 0; border-radius: 4px; background: none; text-align: left; color: var(--text); text-decoration: none; }
@@ -243,7 +245,7 @@ body[data-screen="library"] #library, body[data-screen="song"] #song { display: 
 
 .viewport { overflow: auto; position: relative; padding: 24px; overscroll-behavior: contain; }
 .sheet { max-width: 1240px; margin: 0 auto; min-height: 320px; background: var(--paper); border-radius: 3px; box-shadow: 0 0 0 1px var(--line); user-select: none; -webkit-touch-callout: none; transition: background-color .2s; }
-.loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--text-2); background: var(--canvas); z-index: 5; }
+.loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--text-2); background: var(--canvas); z-index: var(--z-loading); }
 .spinner { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--line-strong); border-top-color: var(--text-2); animation: spin .7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -256,7 +258,11 @@ body[data-screen="library"] #library, body[data-screen="song"] #song { display: 
 .at-highlight * { fill: var(--accent); stroke: var(--accent); }
 
 /* string names next to the tab lines (positioned from alphaTab's layout) */
-.sheet { position: relative; }
+/* alphaTab puts its cursor/selection layers at z-index 1000. isolation seals the sheet into its own stacking
+   context, so nothing drawn in it can ever rise above the app's bars, menus or toasts. */
+.sheet { position: relative; isolation: isolate; z-index: var(--z-sheet); }
+.viewport { isolation: isolate; }
+.bar, .map, .practice, .transport { position: relative; z-index: var(--z-chrome); }
 .string-labels { position: absolute; inset: 0; pointer-events: none; }
 .string-labels span { position: absolute; transform: translate(-100%, -50%); font: 600 11px/1 "Atkinson Hyperlegible Next", var(--font); color: var(--label-ink, #6f6a62); letter-spacing: 0; }
 
@@ -322,7 +328,7 @@ body.stage .viewport { padding: 12px; }
 .field input:focus { border-color: var(--text-2); }
 .field .seg { align-self: flex-start; flex-wrap: wrap; }
 .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
-.toast { position: fixed; left: 50%; bottom: 76px; z-index: 200; transform: translate(-50%, 8px); padding: 8px 14px; border-radius: var(--r); background: var(--ink); color: var(--on-ink); font-weight: 500;
+.toast { position: fixed; left: 50%; bottom: 76px; z-index: var(--z-toast); transform: translate(-50%, 8px); padding: 8px 14px; border-radius: var(--r); background: var(--ink); color: var(--on-ink); font-weight: 500;
   opacity: 0; pointer-events: none; transition: opacity .15s, transform .15s; max-width: calc(100vw - 32px); }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
