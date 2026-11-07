@@ -1,9 +1,9 @@
-# systemd unit for running the tab app on a Raspberry Pi.
+# systemd unit for running the tab app on a Linux host.
 # Install:  sudo cp deploy/musicvisualize.service /etc/systemd/system/
 #           sudo systemctl daemon-reload && sudo systemctl enable --now musicvisualize
-# Adjust User and WorkingDirectory if you cloned somewhere other than /home/pi/musicvisualize.
+# Adjust User and WorkingDirectory to match where you cloned it.
 [Unit]
-Description=Tabs - band practice tab viewer
+Description=Tabs - band tab app
 After=network-online.target
 Wants=network-online.target
 

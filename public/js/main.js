@@ -1,87 +1,107 @@
-// App glue: routing, song loading, transport, sections, drawer, keyboard, stage mode.
+// App shell: routing, who's playing, and the song screen (sheet, song map, transport, practice).
 import * as store from './store.js';
+import * as bandApi from './bandapi.js';
 import * as player from './player.js';
 import * as practice from './practice.js';
-import * as home from './home.js';
-import { esc } from './home.js';
+import * as library from './library.js';
 import { INSTRUMENTS, pickTrack, describeTuning } from './instruments.js';
 import { buildSections, sectionAt, spotFor } from './sections.js';
+import { $, esc, icon, toast, popover, closePopover, popoverOpen } from './ui.js';
 
-const $ = (id) => document.getElementById(id);
 const fmt = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 const DEFAULT_VIEW = { guitar: 'tab', bass: 'tab', drums: 'notation', vocals: 'notation', keys: 'notation', other: 'both' };
-const MODES = ['full', 'along', 'solo'];
+const prefersDark = matchMedia('(prefers-color-scheme: dark)').matches;
 
 const app = {
-  info: null, songId: null, sections: [], selected: new Set(), scoreIndexOf: [],
-  spot: null, speed: 1, mode: 'full', playing: false, ready: { render: false, midi: false }, resumed: false,
-  currentSection: -1, prevTick: 0,
+  info: null, songId: null, setId: null, sections: [], selected: new Set(), scoreIndexOf: [],
+  spot: null, speed: 1, playing: false, ready: { render: false, midi: false }, resumed: false, currentSection: -1,
 };
 let api = null;
 
-// ---------- toast
-let toastTimer;
-function toast(msg) {
-  const t = $('toast');
-  t.textContent = msg; t.classList.add('show');
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+// ================= routing =================
+function navigate(hash, opts = {}) {
+  pendingOpts = opts;
+  if (location.hash.slice(1) === hash) route(); else location.hash = hash;
+}
+let pendingOpts = {};
+function route() {
+  const h = new URLSearchParams(location.hash.slice(1));
+  const opts = pendingOpts; pendingOpts = {};
+  closePopover();
+  if (h.get('song')) {
+    document.body.dataset.screen = 'song';
+    openSong(Number(h.get('song')), h.get('set'));
+  } else {
+    leaveSong();
+    document.body.dataset.screen = 'library';
+    document.title = 'Tabs';
+    library.render(h.get('set') ? { kind: 'set', id: h.get('set') } : { kind: 'songs' }, opts);
+  }
 }
 
-// ---------- profile
-function drawProfileChip() {
+function leaveSong() {
+  if (api && app.playing) api.pause();
+  if (document.body.classList.contains('stage')) toggleStage(false);
+}
+
+// ================= who's playing =================
+function drawWho() {
   const p = store.profile();
   const inst = INSTRUMENTS.find((i) => i.id === p?.instrument);
-  $('profile-btn').innerHTML = p ? `<span class="av">${esc(p.name[0].toUpperCase())}</span><span class="nm">${esc(p.name)} · ${inst?.label ?? ''}</span>` : 'Who are you?';
+  $('who-btn').innerHTML = p ? `${esc(p.name)}<span class="meta">${inst?.label ?? ''}</span>${icon('chev-down')}` : 'Set up';
 }
 
-function openProfile(first = false) {
-  const p = store.profile();
-  let inst = p?.instrument ?? 'guitar';
-  $('p-name').value = p?.name ?? '';
-  const names = store.profileNames();
-  $('profile-list').innerHTML = names.length > 1 || (names.length && !p)
-    ? names.map((n) => `<button type="button" data-p="${esc(n)}" class="${n === p?.name ? 'on' : ''}">${esc(n)}</button>`).join('') : '';
-  const drawInst = () => { $('p-inst').innerHTML = INSTRUMENTS.map((i) => `<button type="button" data-i="${i.id}" class="${i.id === inst ? 'on' : ''}"><span>${i.icon}</span>${i.label}</button>`).join(''); };
+function whoDialog({ name = '', instrument = 'guitar', required = false } = {}) {
+  let inst = instrument;
+  $('who-name').value = name;
+  const drawInst = () => {
+    $('who-inst').innerHTML = INSTRUMENTS.map((i) => `<button type="button" role="radio" aria-checked="${i.id === inst}" data-i="${i.id}">${i.label}</button>`).join('');
+  };
   drawInst();
-  $('p-inst').onclick = (e) => { const b = e.target.closest('[data-i]'); if (b) { inst = b.dataset.i; drawInst(); } };
-  $('profile-list').onclick = (e) => {
-    const b = e.target.closest('[data-p]'); if (!b) return;
-    store.setProfile(b.dataset.p); $('profile-dlg').close(); afterProfileChange();
+  $('who-inst').onclick = (e) => { const b = e.target.closest('[data-i]'); if (b) { inst = b.dataset.i; drawInst(); } };
+  $('who-form').onsubmit = (e) => {
+    const n = $('who-name').value.trim();
+    if (!n) { e.preventDefault(); return; }
+    store.setProfile(n, inst);
+    afterWho();
   };
-  $('profile-form').onsubmit = (e) => {
-    const name = $('p-name').value.trim();
-    if (!name) { e.preventDefault(); return; }
-    store.setProfile(name, inst);
-    afterProfileChange();
-  };
-  $('profile-dlg').oncancel = (e) => { if (first) e.preventDefault(); };
-  $('profile-dlg').showModal();
-  if (!p) $('p-name').focus();
+  $('who').oncancel = (e) => { if (required) e.preventDefault(); };
+  $('who').showModal();
+  $('who-name').focus();
 }
 
-function afterProfileChange() {
-  drawProfileChip();
-  if (app.info) openSong(app.songId, { keepTrack: false }); else home.render();
+function afterWho() {
+  drawWho();
+  if (app.info) { const id = app.songId; app.songId = null; openSong(id, app.setId, { fresh: true }); }
+  else route();
 }
 
-// ---------- routing
-function showHome() {
-  stopPlayback();
-  document.body.dataset.view = 'home';
-  document.title = 'Tabs';
-  history.replaceState(null, '', location.pathname);
-  app.info = null; app.songId = null;
-  home.render();
-}
+$('who-btn').onclick = () => {
+  const p = store.profile();
+  popover($('who-btn'), () => `
+    <div class="menu-label">Players on this device</div>
+    ${store.profileNames().map((n) => `<button class="menu-item" data-p="${esc(n)}"><span class="check">${n === p?.name ? icon('check') : ''}</span><span class="grow">${esc(n)}</span><span class="meta">${INSTRUMENTS.find((i) => i.id === store.profileInstrument(n))?.label ?? ''}</span></button>`).join('')}
+    <div class="menu-sep"></div>
+    <button class="menu-item" data-act="edit"><span class="check"></span>Edit ${esc(p?.name ?? 'player')}…</button>
+    <button class="menu-item" data-act="new"><span class="check">${icon('plus')}</span>New player…</button>`, {
+    align: 'end',
+    onClick: (e, m) => {
+      const pick = e.target.closest('[data-p]');
+      if (pick) { m.close(); store.setProfile(pick.dataset.p); afterWho(); return; }
+      const act = e.target.closest('[data-act]')?.dataset.act;
+      if (act) { m.close(); whoDialog(act === 'edit' ? { name: p?.name, instrument: p?.instrument } : {}); }
+    },
+  });
+};
 
-function stopPlayback() { if (api && app.playing) api.stop(); }
-
-// ---------- song loading
-async function openSong(id, { keepTrack = true } = {}) {
-  stopPlayback();
-  document.body.dataset.view = 'song';
-  loading('Fetching tabs…');
+// ================= song screen =================
+async function openSong(id, setId, { fresh = false } = {}) {
+  app.setId = setId || null;
+  drawSetNav();
+  if (id === app.songId && !fresh) { drawHeader(); return; }
+  if (api && app.playing) api.stop();
   closeSpot(false);
+  loading('Loading');
   let info;
   try {
     const res = await fetch('/api/song/' + id);
@@ -90,53 +110,92 @@ async function openSong(id, { keepTrack = true } = {}) {
   } catch (e) {
     loading(null);
     toast('Could not load that song: ' + e.message);
-    if (!app.info) showHome();
     return;
   }
   const s = store.song(id);
-  const role = store.profile()?.instrument;
   app.info = info; app.songId = id; app.resumed = false;
   app.ready = { render: false, midi: false };
   let n = 0; app.scoreIndexOf = info.tracks.map((t) => (t.loaded ? n++ : -1));
-  const track = pickTrack(info, role, keepTrack ? s.track : null);
-  app.selected = new Set([track]);
-  app.mode = store.pref('bandMode', 'full');
-  store.updateSong(id, { title: info.title, artist: info.artist, opened: Date.now(), track, sectionCount: info.sections || undefined });
+  app.selected = new Set([pickTrack(info, store.profile()?.instrument, s.track)]);
+  rememberPart();
+  store.updateSong(id, { title: info.title, artist: info.artist, opened: Date.now(), sectionCount: info.sections || undefined });
 
   document.title = `${info.title} · ${info.artist}`;
-  $('song-title').querySelector('.st-t').textContent = info.title;
-  $('song-title').querySelector('.st-a').textContent = info.artist;
-  $('dl-gp').href = `/api/song/${id}/score.gp?download=1`;
-  $('dl-json').href = `/api/song/${id}/raw.json`;
-  history.replaceState(null, '', `#song=${id}`);
-  drawPart(); drawTracks(); drawModes(); drawView();
-  if (info.missing.length) toast(`${info.missing.length} track(s) couldn't be fetched`);
+  $('s-title').textContent = info.title;
+  $('s-artist').textContent = info.artist;
+  drawHeader();
+  drawMixControls();
+  if (info.missing.length) toast(`${info.missing.length} part(s) couldn't be downloaded`);
 
   if (!api) createApi();
-  loading('Drawing the music…');
   api.load(`/api/song/${id}/score.gp`);
+}
+
+const mainTrack = () => app.info.tracks[[...app.selected][0]];
+function rememberPart() {
+  const t = mainTrack();
+  const tun = describeTuning(t.tuning, t.role);
+  const tuning = [tun && !tun.standard ? tun.name : tun ? 'Standard' : null, t.capo ? `Capo ${t.capo}` : null].filter(Boolean).join(' · ');
+  store.updateSong(app.songId ?? app.info.songId, { track: t.index, partName: t.part, tuningName: tuning || null, tuningOdd: !!((tun && !tun.standard) || t.capo) });
 }
 
 function loading(msg) { $('loading').hidden = !msg; if (msg) $('loading-msg').textContent = msg; }
 
-const yourView = () => store.pref(`view:${roleOfSelected()}`, DEFAULT_VIEW[roleOfSelected()] ?? 'tab');
-const roleOfSelected = () => app.info?.tracks[[...app.selected][0]]?.role ?? 'other';
-const scoreTracks = () => [...app.selected].sort((a, b) => a - b).map((i) => api?.score?.tracks[app.scoreIndexOf[i]]).filter(Boolean);
-const mineSet = () => new Set(scoreTracks().map((t) => t.index));
-
-function autoZoom() {
-  const w = window.innerWidth;
-  return w < 500 ? 0.8 : w < 900 ? 0.95 : w > 1600 ? 1.15 : 1.05;
+function drawHeader() {
+  if (!app.info) return;
+  const t = mainTrack();
+  const tun = describeTuning(t.tuning, t.role);
+  const odd = [tun && !tun.standard ? tun.name : null, t.capo ? `Capo ${t.capo}` : null].filter(Boolean).join(' · ');
+  const more = app.selected.size > 1 ? ` + ${app.selected.size - 1}` : '';
+  $('part-name').textContent = t.part + more;
+  $('part-meta').textContent = odd || (tun ? 'Standard' : '');
+  $('part-meta').className = `meta ${odd ? 'warn' : ''}`;
+  $('add-song').hidden = bandApi.hasSong(app.songId);
+  const l = app.setId && bandApi.setlist(app.setId);
+  $('back-label').textContent = l ? l.name : 'Songs';
 }
 
+function drawSetNav() {
+  const l = app.setId && bandApi.setlist(app.setId);
+  const current = Number(new URLSearchParams(location.hash.slice(1)).get('song')) || app.songId;
+  const i = l ? l.songIds.indexOf(current) : -1;
+  $('setnav').hidden = !l || i < 0;
+  if (!l || i < 0) return;
+  $('set-pos').textContent = `${i + 1} of ${l.songIds.length}`;
+  const prev = bandApi.songMeta(l.songIds[i - 1]), next = bandApi.songMeta(l.songIds[i + 1]);
+  $('set-prev').disabled = !prev; $('set-prev').title = prev ? `Previous: ${prev.title} (P)` : '';
+  $('set-next').disabled = !next; $('set-next').title = next ? `Next: ${next.title} (N)` : 'End of setlist';
+}
+function stepSet(dir) {
+  const l = app.setId && bandApi.setlist(app.setId);
+  if (!l) return;
+  const current = Number(new URLSearchParams(location.hash.slice(1)).get('song')) || app.songId;
+  const id = l.songIds[l.songIds.indexOf(current) + dir];
+  if (id) navigate(`song=${id}&set=${l.id}`);
+}
+$('set-prev').onclick = () => stepSet(-1);
+$('set-next').onclick = () => stepSet(1);
+$('back').onclick = () => navigate(app.setId && bandApi.setlist(app.setId) ? `set=${app.setId}` : '');
+$('add-song').onclick = async () => {
+  await bandApi.addSong(app.info);
+  drawHeader();
+  toast(`Added ${app.info.title} to songs`);
+};
+
+const roleOfMain = () => mainTrack()?.role ?? 'other';
+const yourView = () => store.pref(`view:${roleOfMain()}`, DEFAULT_VIEW[roleOfMain()] ?? 'tab');
+const scoreTracks = () => [...app.selected].sort((a, b) => a - b).map((i) => api?.score?.tracks[app.scoreIndexOf[i]]).filter(Boolean);
+const autoZoom = () => { const w = innerWidth; return w < 500 ? 0.8 : w < 900 ? 0.95 : w > 1600 ? 1.1 : 1; };
+const zoomLevel = () => store.device('zoom', autoZoom());
+
 function createApi() {
-  api = player.create($('sheet'), $('viewport'), { scale: store.device('zoom', autoZoom()), layout: store.device('layout', 'Page'), view: yourView() });
-  window.tabApi = api; // handy for debugging from the console
+  api = player.create($('sheet'), $('viewport'), { scale: zoomLevel(), layout: store.device('layout', 'Page'), view: yourView() });
+  window.tabApi = api; // for debugging in the console
   api.scoreLoaded.on((score) => {
-    // Guitar Pro stores key signatures per master bar, so drum staves inherit the song key on import; drums have none.
+    // Guitar Pro stores key signatures per master bar, so drum staves inherit the song key on import.
     for (const t of score.tracks) for (const st of t.staves) if (st.isPercussion) for (const b of st.bars) b.keySignature = 0;
     app.sections = buildSections(score);
-    drawSections();
+    drawMap();
     player.render(scoreTracks(), yourView());
   });
   api.renderFinished.on(() => loading(null));
@@ -146,17 +205,15 @@ function createApi() {
     else if (app.spot) player.highlightBars(app.spot.start, app.spot.end);
   });
   api.midiLoaded.on(() => { app.ready.midi = true; applyMix(); maybeResume(); });
-  api.error.on((e) => { loading(null); toast('Render error: ' + (e.message || e)); console.error(e); });
+  api.error.on((e) => { loading(null); toast('Could not draw this song'); console.error(e); });
   api.soundFontLoad.on((e) => {
-    $('sf-status').hidden = false;
-    $('sf-status').querySelector('i').style.width = `${Math.round((e.loaded / (e.total || 1)) * 100)}%`;
+    $('sf').hidden = false;
+    $('sf').querySelector('i').style.width = `${Math.round((e.loaded / (e.total || 1)) * 100)}%`;
   });
-  api.playerReady.on(() => { $('sf-status').hidden = true; $('t-play').disabled = false; applyMix(); applyToggles(); });
-  api.soundFontLoadFailed?.on(() => toast('Could not load the instrument sounds'));
+  api.playerReady.on(() => { $('sf').hidden = true; $('t-play').disabled = false; applyMix(); applyToggles(); });
   api.playerStateChanged.on((e) => {
     app.playing = e.state === 1;
-    $('t-play').textContent = app.playing ? '❚❚' : '▶';
-    $('t-play').classList.toggle('playing', app.playing);
+    $('t-play').innerHTML = icon(app.playing ? 'pause' : 'play');
     $('t-play').setAttribute('aria-label', app.playing ? 'Pause' : 'Play');
   });
   api.playerPositionChanged.on(onPosition);
@@ -172,31 +229,33 @@ function maybeResume() {
   setSpeed(s.speed ?? 1, false);
   const spot = s.lastSpot?.key ? s.lastSpot : null;
   if (spot && spot.end < player.barCount()) {
-    const best = s.spots[spot.key]?.best;
     loopSpot({ key: spot.key, label: spot.label, start: spot.start, end: spot.end });
     player.seekBar(spot.start);
-    setTimeout(() => api.scrollToCursor(), 50);
-    toast(`Picking up at ${spot.label}${best ? `, best ${best}%` : ''}`);
-  } else {
-    const t = app.info.tracks[[...app.selected][0]];
-    const tun = describeTuning(t?.tuning, t?.role);
-    toast(`Your part: ${t?.part}${tun && !tun.standard ? ` · ${tun.name}` : ''}${t?.capo ? ` · capo ${t.capo}` : ''}`);
+    setTimeout(() => showBar(spot.start), 150); // after alphaTab settles its own cursor scroll
   }
 }
 
-// ---------- playback position → time, current section, loop passes
+// ---------- position, passes, loop range
 function onPosition(e) {
-  $('t-time').textContent = `${fmt(e.currentTime)} / ${fmt(e.endTime)}`;
-  const idx = sectionAt(app.sections, player.barAt(e.currentTick));
+  $('t-time').innerHTML = `${fmt(e.currentTime)} <span class="meta">/ ${fmt(e.endTime)}</span>`;
+  const bar = player.barAt(e.currentTick);
+  const idx = sectionAt(app.sections, bar);
+  const secs = $('map-track').querySelectorAll('.sec');
   if (idx !== app.currentSection) {
     app.currentSection = idx;
-    document.querySelectorAll('.chip').forEach((c, i) => c.classList.toggle('now', i === idx));
-    $('sections').children[idx]?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+    secs.forEach((c, i) => c.classList.toggle('now', i === idx));
+    if (app.playing) secs[idx]?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+  }
+  const sec = app.sections[idx], el = secs[idx];
+  if (sec && el) {
+    const a = player.barStart(sec.start), b = player.barEnd(sec.end);
+    const f = b > a ? Math.min(1, Math.max(0, (e.currentTick - a) / (b - a))) : 0;
+    $('playhead').style.left = `${el.offsetLeft + el.offsetWidth * f}px`;
   }
 }
 
-// End of a pass through the loop. Without count-in alphaTab loops seamlessly by itself; with count-in we restart
-// playback ourselves, because alphaTab only counts in when playback starts.
+// End of a pass. Without count-in alphaTab loops seamlessly; with count-in we restart playback ourselves,
+// because alphaTab only counts in when playback starts.
 function onFinished() {
   if (!app.spot) return;
   practice.onPass();
@@ -209,17 +268,13 @@ function onFinished() {
     }, 250);
   }
 }
-
-/** Seamless looping, unless count-in is on: then every pass gets its own count-in. */
 function syncLoopMode() { if (api) api.isLooping = !!app.spot && !store.pref('countIn', true); }
 
-// alphaTab tells us whenever the loop range changes, from our code or from dragging across the sheet.
 function onRange(range) {
   if (!range) { if (app.spot) closeSpot(false); return; }
   const start = player.barAt(range.startTick), end = player.barAt(Math.max(range.startTick, range.endTick - 1));
   const spot = spotFor(app.sections, start, end);
-  if (app.spot?.key === spot.key) return;
-  setSpot(spot);
+  if (app.spot?.key !== spot.key) setSpot(spot);
 }
 
 // ---------- spots (what you're practicing)
@@ -233,14 +288,14 @@ function setSpot(spot) {
     getSpeed: () => app.speed,
     setSpeed: (v) => setSpeed(v),
     onClose: () => closeSpot(true),
-    onProgress: drawSectionMeters,
+    onProgress: drawMapProgress,
     toast,
   });
   syncLoopMode();
   drawLoopState();
 }
 
-/** byUser: you closed the loop on purpose, so forget it for next time. Otherwise just reset the UI. */
+/** byUser: you stopped the loop on purpose, so forget it. Otherwise just reset the UI. */
 function closeSpot(byUser = true) {
   app.spot = null;
   practice.close();
@@ -253,62 +308,62 @@ function closeSpot(byUser = true) {
 }
 
 function drawLoopState() {
-  $('t-loop').classList.toggle('on', !!app.spot);
+  $('t-loop').setAttribute('aria-pressed', String(!!app.spot));
   const s = app.spot;
-  document.querySelectorAll('.chip').forEach((c) => {
+  $('map-track').querySelectorAll('.sec').forEach((c) => {
     const sec = app.sections[Number(c.dataset.i)];
     c.classList.toggle('loop', !!s && sec.start >= s.start && sec.end <= s.end);
   });
 }
 
-// ---------- sections strip
-function drawSections() {
-  $('sections').innerHTML = app.sections.map((s, i) => `<button class="chip" data-i="${i}" title="Tap: jump · Double-tap or hold: loop · Shift-click: loop a range">${esc(s.label)}<span class="m"></span></button>`).join('');
+// ---------- song map
+function drawMap() {
+  $('map-track').innerHTML = app.sections.map((s, i) =>
+    `<button class="sec" data-i="${i}" style="--w:${s.end - s.start + 1}" title="${esc(s.label)} · bars ${s.start + 1}–${s.end + 1}. Click to jump, double-click to loop">
+      <span>${esc(s.label)}</span><i class="best"></i></button>`).join('') + '<div class="playhead" id="playhead"></div>';
   app.currentSection = -1;
-  drawSectionMeters(); drawLoopState();
+  drawMapProgress(); drawLoopState();
 }
 
-function drawSectionMeters() {
+function drawMapProgress() {
   const spots = store.song(app.songId).spots;
-  document.querySelectorAll('.chip').forEach((c) => {
+  $('map-track').querySelectorAll('.sec').forEach((c) => {
     const best = spots[app.sections[Number(c.dataset.i)].key]?.best || 0;
-    c.querySelector('.m').style.width = `${Math.min(100, best)}%`;
+    c.querySelector('.best').style.width = `${Math.min(100, best)}%`;
   });
 }
 
 let holdTimer = null, held = false;
-$('sections').addEventListener('pointerdown', (e) => {
-  const c = e.target.closest('.chip'); if (!c) return;
+$('map').addEventListener('pointerdown', (e) => {
+  const c = e.target.closest('.sec'); if (!c) return;
   held = false;
-  holdTimer = setTimeout(() => { held = true; navigator.vibrate?.(15); loopSection(Number(c.dataset.i)); }, 450);
+  holdTimer = setTimeout(() => { held = true; navigator.vibrate?.(10); loopSection(Number(c.dataset.i)); }, 450);
 });
-['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) => $('sections').addEventListener(ev, () => clearTimeout(holdTimer)));
-$('sections').addEventListener('click', (e) => {
-  const c = e.target.closest('.chip'); if (!c || held) return;
+['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) => $('map').addEventListener(ev, () => clearTimeout(holdTimer)));
+$('map').addEventListener('click', (e) => {
+  const c = e.target.closest('.sec'); if (!c || held) return;
   const i = Number(c.dataset.i), sec = app.sections[i];
-  if (e.shiftKey && app.spot) {
-    loopSpot(spotFor(app.sections, Math.min(app.spot.start, sec.start), Math.max(app.spot.end, sec.end)));
-  } else if (app.spot) {
-    loopSection(i); // while practicing, tapping another section moves the loop there
-  } else {
-    player.seekBar(sec.start);
-    if (!app.playing) setTimeout(() => api.scrollToCursor(), 50);
-  }
+  if (e.shiftKey && app.spot) loopSpot(spotFor(app.sections, Math.min(app.spot.start, sec.start), Math.max(app.spot.end, sec.end)));
+  else if (app.spot) loopSection(i); // while looping, picking a section moves the loop there
+  else { player.seekBar(sec.start); if (!app.playing) showBar(sec.start); }
 });
-$('sections').addEventListener('dblclick', (e) => { const c = e.target.closest('.chip'); if (c) loopSection(Number(c.dataset.i)); });
+$('map').addEventListener('dblclick', (e) => { const c = e.target.closest('.sec'); if (c) loopSection(Number(c.dataset.i)); });
+
+const showBar = (i) => player.scrollToBar(i, $('viewport'), $('sheet'));
 
 function loopSection(i) {
   const sec = app.sections[i]; if (!sec) return;
   loopSpot(spotFor(app.sections, sec.start, sec.end));
   player.seekBar(sec.start);
-  if (!app.playing) setTimeout(() => api.scrollToCursor(), 50); // show the section even before you press play
+  if (!app.playing) showBar(sec.start);
 }
 
 function stepSection(dir) {
   if (!app.sections.length) return;
   const cur = app.spot ? sectionAt(app.sections, app.spot.start) : Math.max(0, app.currentSection);
   const next = Math.max(0, Math.min(app.sections.length - 1, cur + dir));
-  if (app.spot) loopSection(next); else player.seekBar(app.sections[next].start);
+  if (app.spot) loopSection(next);
+  else { player.seekBar(app.sections[next].start); if (!app.playing) showBar(sec.start); }
 }
 
 // ---------- transport
@@ -316,24 +371,25 @@ function setSpeed(v, persist = true) {
   app.speed = Math.round(Math.max(0.25, Math.min(1.5, v)) * 100) / 100;
   if (api) api.playbackSpeed = app.speed;
   const pct = Math.round(app.speed * 100);
-  $('sp-val').querySelector('b').textContent = `${pct}%`;
-  $('sp-val').classList.toggle('slow', pct !== 100);
+  $('sp-pct').textContent = `${pct}%`;
+  $('sp-val').classList.toggle('changed', pct !== 100);
   $('sp-bpm').textContent = app.info?.tempo ? `${Math.round(app.info.tempo * app.speed)} bpm` : '';
   if (persist && app.songId) store.updateSong(app.songId, { speed: app.speed });
 }
 
 function applyToggles() {
-  const count = store.pref('countIn', true), metro = store.pref('metronome', false);
-  if (api) { api.countInVolume = count ? 1 : 0; api.metronomeVolume = metro ? 1 : 0; }
-  $('t-count').classList.toggle('on', count);
+  const count = store.pref('countIn', true), click = store.pref('metronome', false);
+  if (api) { api.countInVolume = count ? 1 : 0; api.metronomeVolume = click ? 1 : 0; }
+  $('t-count').setAttribute('aria-pressed', String(count));
+  $('t-click').setAttribute('aria-pressed', String(click));
   syncLoopMode();
-  $('t-metro').classList.toggle('on', metro);
 }
+const toggleCount = () => { store.setPref('countIn', !store.pref('countIn', true)); applyToggles(); };
+const toggleClick = () => { store.setPref('metronome', !store.pref('metronome', false)); applyToggles(); };
 
 function playPause() { if (api && !$('t-play').disabled) api.playPause(); }
-
 $('t-play').onclick = playPause;
-$('t-back').onclick = () => {
+$('t-start').onclick = () => {
   if (app.spot) return player.seekBar(app.spot.start);
   const sec = app.sections[Math.max(0, app.currentSection)];
   if (sec) player.seekBar(sec.start);
@@ -342,190 +398,195 @@ $('sp-down').onclick = () => setSpeed(app.speed - 0.05);
 $('sp-up').onclick = () => setSpeed(app.speed + 0.05);
 $('sp-val').onclick = () => setSpeed(1);
 $('t-loop').onclick = () => (app.spot ? closeSpot() : loopSection(Math.max(0, app.currentSection)));
-$('t-count').onclick = () => { store.setPref('countIn', !store.pref('countIn', true)); applyToggles(); };
-$('t-metro').onclick = () => { store.setPref('metronome', !store.pref('metronome', false)); applyToggles(); };
+$('t-count').onclick = toggleCount;
+$('t-click').onclick = toggleClick;
 
-// ---------- band mode + mix
-function drawModes() { document.querySelectorAll('#band-mode button').forEach((b) => b.classList.toggle('on', b.dataset.mode === app.mode)); }
-function setMode(m) {
-  app.mode = m; store.setPref('bandMode', m); drawModes(); applyMix();
-  toast({ full: 'Full band', along: 'Play along: your part is muted', solo: 'Just your part' }[m]);
-}
-$('band-mode').onclick = (e) => { const b = e.target.closest('[data-mode]'); if (b) setMode(b.dataset.mode); };
-
-/** Song mix in Songsterr track indexes; vocals start muted (they're a guide melody) unless you sing. */
-function mixFor(i) {
-  const m = store.song(app.songId).mix[i] || {};
-  const t = app.info.tracks[i];
-  const vocalDefault = t.role === 'vocals' && store.profile()?.instrument !== 'vocals';
-  return { vol: m.vol ?? 1, mute: m.mute ?? vocalDefault };
+// ---------- mix: two faders, you and the band
+const mixMe = () => store.pref('mixMe', 100);
+const mixBand = () => store.pref('mixBand', 100);
+function fill(el) { el.style.setProperty('--fill', `${el.value}%`); }
+function drawMixControls() {
+  for (const [id, v] of [['mix-me', mixMe()], ['mix-band', mixBand()]]) { $(id).value = v; fill($(id)); }
 }
 function applyMix() {
   if (!api?.score || !app.info) return;
-  const mixer = {};
-  app.info.tracks.forEach((t, i) => { if (app.scoreIndexOf[i] >= 0) mixer[app.scoreIndexOf[i]] = mixFor(i); });
-  player.applyMix(app.mode, mixer, mineSet());
+  const mine = new Set(scoreTracks().map((t) => t.index));
+  const silent = new Set(app.info.tracks.filter((t) => t.role === 'vocals' && t.loaded).map((t) => app.scoreIndexOf[t.index]));
+  player.applyMix(mixMe() / 100, mixBand() / 100, mine, silent);
 }
-
-// ---------- header part + drawer
-function drawPart() {
-  const t = app.info.tracks[[...app.selected][0]];
-  const tun = describeTuning(t.tuning, t.role);
-  const more = app.selected.size > 1 ? ` +${app.selected.size - 1}` : '';
-  $('st-part').innerHTML = `<span>${esc(t.part)}${more}</span><span>${tun ? `<span class="badge ${tun.standard ? '' : 'warn'}" title="${esc(tun.notes)}">${esc(tun.name)}</span>` : ''}${t.capo ? ` <span class="badge warn">Capo ${t.capo}</span>` : ''}</span>`;
-}
-
-function drawTracks() {
-  const info = app.info;
-  $('tracks').innerHTML = info.tracks.map((t) => {
-    const tun = describeTuning(t.tuning, t.role);
-    const m = mixFor(t.index);
-    return `<div class="trk ${app.selected.has(t.index) ? 'on' : ''} ${t.loaded ? '' : 'off'}">
-      <button class="trk-pick" data-i="${t.index}" ${t.loaded ? '' : 'disabled'}>
-        <span class="n">${esc(t.part)}${app.selected.has(t.index) ? ' · yours' : ''}</span>
-        <span class="b">${t.loaded ? '' : '<span class="badge">unavailable</span>'}${tun && !tun.standard ? `<span class="badge warn" title="${esc(tun.notes)}">${esc(tun.name)}</span>` : ''}${t.capo ? `<span class="badge warn">Capo ${t.capo}</span>` : ''}${t.role === 'vocals' ? '<span class="badge">guide melody</span>' : t.role === 'drums' ? '' : `<span class="badge">${esc(t.instrument)}</span>`}</span>
-      </button>
-      ${t.loaded ? `<div class="trk-mix"><input type="range" min="0" max="1.5" step="0.05" value="${m.vol}" data-vol="${t.index}" aria-label="${esc(t.part)} volume">
-        <button class="mute ${m.mute ? 'on' : ''}" data-mute="${t.index}" title="${m.mute ? 'Unmute' : 'Mute'}" aria-label="Mute ${esc(t.part)}">${m.mute ? '🔇' : '🔊'}</button></div>` : ''}
-    </div>`;
-  }).join('');
-}
-
-let trkHold = null, trkHeld = false;
-$('tracks').addEventListener('pointerdown', (e) => {
-  const b = e.target.closest('.trk-pick'); if (!b) return;
-  trkHeld = false;
-  trkHold = setTimeout(() => { trkHeld = true; navigator.vibrate?.(15); pickTrackUI(Number(b.dataset.i), true); }, 450);
-});
-['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) => $('tracks').addEventListener(ev, () => clearTimeout(trkHold)));
-$('tracks').addEventListener('click', (e) => {
-  const b = e.target.closest('.trk-pick');
-  if (b && !b.disabled && !trkHeld) pickTrackUI(Number(b.dataset.i), e.ctrlKey || e.metaKey || e.shiftKey);
-  const mu = e.target.closest('[data-mute]');
-  if (mu) {
-    const i = Number(mu.dataset.mute), m = mixFor(i);
-    store.song(app.songId).mix[i] = { ...m, mute: !m.mute };
-    store.updateSong(app.songId, {});
-    applyMix(); drawTracks();
-  }
-});
-$('tracks').addEventListener('input', (e) => {
-  const v = e.target.closest('[data-vol]'); if (!v) return;
-  const i = Number(v.dataset.vol);
-  store.song(app.songId).mix[i] = { ...mixFor(i), vol: Number(v.value) };
-  store.updateSong(app.songId, {});
+function onFader(e) {
+  const el = e.target;
+  if (el.id !== 'mix-me' && el.id !== 'mix-band') return;
+  fill(el);
+  store.setPref(el.id === 'mix-me' ? 'mixMe' : 'mixBand', Number(el.value));
   applyMix();
-});
+  // keep the inline faders and the popover faders in step
+  for (const other of document.querySelectorAll(`input[data-mix="${el.id}"], #${el.id}`)) if (other !== el) { other.value = el.value; fill(other); }
+}
+document.addEventListener('input', onFader);
+$('mix-btn').onclick = () => {
+  popover($('mix-btn'), () => `
+    <label class="fader"><span>You</span><input type="range" data-mix="mix-me" min="0" max="100" value="${mixMe()}" style="--fill:${mixMe()}%"></label>
+    <label class="fader"><span>Band</span><input type="range" data-mix="mix-band" min="0" max="100" value="${mixBand()}" style="--fill:${mixBand()}%"></label>
+    <div class="menu-sep"></div>
+    <button class="menu-item" data-t="count"><span class="check">${store.pref('countIn', true) ? icon('check') : ''}</span>Count-in</button>
+    <button class="menu-item" data-t="click"><span class="check">${store.pref('metronome', false) ? icon('check') : ''}</span>Click</button>`, {
+    align: 'end',
+    onClick: (e, m) => {
+      const inp = e.target.closest('input[data-mix]');
+      if (inp && e.type === 'input') {
+        store.setPref(inp.dataset.mix === 'mix-me' ? 'mixMe' : 'mixBand', Number(inp.value));
+        fill(inp); $(inp.dataset.mix).value = inp.value; fill($(inp.dataset.mix)); applyMix();
+        return;
+      }
+      const t = e.target.closest('[data-t]')?.dataset.t;
+      if (t === 'count') { toggleCount(); m.redraw(); }
+      if (t === 'click') { toggleClick(); m.redraw(); }
+    },
+  });
+};
 
-function pickTrackUI(i, add) {
-  if (add) { if (app.selected.has(i) && app.selected.size > 1) app.selected.delete(i); else app.selected.add(i); }
-  else app.selected = new Set([i]);
-  store.updateSong(app.songId, { track: [...app.selected][0] });
-  drawTracks(); drawPart(); drawView();
+// ---------- part picker
+$('part-btn').onclick = () => {
+  popover($('part-btn'), () => `
+    <div class="menu-label">Part</div>
+    ${app.info.tracks.filter((t) => t.loaded).map((t) => {
+      const tun = describeTuning(t.tuning, t.role);
+      const odd = [tun && !tun.standard ? tun.name : null, t.capo ? `Capo ${t.capo}` : null].filter(Boolean).join(' · ');
+      const on = app.selected.has(t.index);
+      return `<button class="menu-item" data-pick="${t.index}">
+        <span class="check">${on ? icon('check') : ''}</span>
+        <span class="stack grow"><span>${esc(t.part)}</span>${odd ? `<span class="meta warn">${esc(odd)}</span>` : ''}</span>
+        ${on && app.selected.size === 1 ? '' : `<span class="btn icon ghost sm also" data-also="${t.index}" role="button" aria-pressed="${on}" title="${on ? 'Hide' : 'Show alongside'}">${icon(on ? 'minus' : 'plus')}</span>`}
+      </button>`;
+    }).join('')}`, {
+    onClick: (e, m) => {
+      const also = e.target.closest('[data-also]');
+      const pick = e.target.closest('[data-pick]');
+      if (!pick) return;
+      const i = Number(pick.dataset.pick);
+      if (also) {
+        e.stopPropagation();
+        if (app.selected.has(i)) { if (app.selected.size > 1) app.selected.delete(i); } else app.selected.add(i);
+        changeParts(); m.redraw();
+      } else {
+        app.selected = new Set([i]);
+        changeParts(); m.close();
+      }
+    },
+  });
+};
+function changeParts() {
+  rememberPart();
+  drawHeader();
   rerender();
   applyMix();
 }
 
-function drawView() {
-  const v = yourView();
-  document.querySelectorAll('#view-seg button').forEach((b) => b.classList.toggle('on', b.dataset.view === v));
-  const l = store.device('layout', 'Page');
-  document.querySelectorAll('#layout-seg button').forEach((b) => b.classList.toggle('on', b.dataset.layout === l));
-  $('z-val').textContent = `${Math.round(store.device('zoom', autoZoom()) * 100)}%`;
-}
-$('view-seg').onclick = (e) => {
-  const b = e.target.closest('[data-view]'); if (!b) return;
-  store.setPref(`view:${roleOfSelected()}`, b.dataset.view);
-  drawView(); rerender();
+// ---------- view menu
+const VIEWS = [['tab', 'Tab'], ['both', 'Tab + staff'], ['notation', 'Staff']];
+$('view-btn').onclick = () => {
+  popover($('view-btn'), () => {
+    const v = yourView(), l = store.device('layout', 'Page'), dark = document.body.classList.contains('dark-sheet');
+    const seg = (name, items, cur) => `<div class="seg" role="radiogroup">${items.map(([k, label]) => `<button role="radio" data-${name}="${k}" aria-checked="${k === cur}">${label}</button>`).join('')}</div>`;
+    return `
+      <div class="menu-row"><span>Notation</span>${seg('view', VIEWS, v)}</div>
+      <div class="menu-row"><span>Layout</span>${seg('layout', [['Page', 'Page'], ['Horizontal', 'One line']], l)}</div>
+      <div class="menu-row"><span>Size</span><div class="stepper">
+        <button class="btn icon ghost" data-zoom="-0.1" aria-label="Smaller">${icon('minus')}</button>
+        <span class="tempo" style="min-width:48px">${Math.round(zoomLevel() * 100)}%</span>
+        <button class="btn icon ghost" data-zoom="0.1" aria-label="Larger">${icon('plus')}</button></div></div>
+      <div class="menu-row"><span>Sheet</span>${seg('sheet', [['light', 'Light'], ['dark', 'Dark']], dark ? 'dark' : 'light')}</div>`;
+  }, {
+    align: 'end',
+    onClick: (e, m) => {
+      const b = e.target.closest('button'); if (!b) return;
+      if (b.dataset.view) { store.setPref(`view:${roleOfMain()}`, b.dataset.view); rerender(); }
+      if (b.dataset.layout) { store.setDevice('layout', b.dataset.layout); rerender(() => player.updateDisplay({ layout: b.dataset.layout })); }
+      if (b.dataset.zoom) zoom(Number(b.dataset.zoom));
+      if (b.dataset.sheet) { store.setDevice('sheet', b.dataset.sheet); applySheet(); }
+      m.redraw();
+    },
+  });
 };
-$('layout-seg').onclick = (e) => {
-  const b = e.target.closest('[data-layout]'); if (!b) return;
-  store.setDevice('layout', b.dataset.layout); drawView();
-  rerender(() => player.updateDisplay({ layout: b.dataset.layout }));
-};
+function applySheet() { document.body.classList.toggle('dark-sheet', store.device('sheet', prefersDark ? 'dark' : 'light') === 'dark'); }
 function zoom(d) {
-  const z = Math.round(Math.max(0.5, Math.min(2, store.device('zoom', autoZoom()) + d)) * 100) / 100;
-  store.setDevice('zoom', z); drawView();
+  const z = Math.round(Math.max(0.5, Math.min(2, zoomLevel() + d)) * 100) / 100;
+  store.setDevice('zoom', z);
   rerender(() => player.updateDisplay({ scale: z }));
 }
-$('z-in').onclick = () => zoom(0.1);
-$('z-out').onclick = () => zoom(-0.1);
 $('viewport').addEventListener('wheel', (e) => { if (e.ctrlKey) { e.preventDefault(); zoom(e.deltaY < 0 ? 0.05 : -0.05); } }, { passive: false });
 
 function rerender(draw = () => player.render(scoreTracks(), yourView())) {
-  const spot = app.spot;
-  // alphaTab tries to redraw a stale selection against the new layout and throws; drop it, redraw it after.
-  if (spot) api.clearPlaybackRangeHighlight();
+  // alphaTab tries to redraw a stale selection against the new layout; drop it and redraw after (postRenderFinished).
+  if (app.spot) api.clearPlaybackRangeHighlight();
   draw();
 }
 
-function openDrawer(open = true) {
-  $('drawer').classList.toggle('open', open);
-  $('scrim').classList.toggle('open', open);
-}
-$('song-title').onclick = () => openDrawer(true);
-$('scrim').onclick = () => openDrawer(false);
-$('drawer').querySelector('[data-close]').onclick = () => openDrawer(false);
+// ---------- more menu
+$('more-btn').onclick = () => {
+  $('more-btn')._song = { songId: app.songId, title: app.info.title, artist: app.info.artist };
+  library.songMenu($('more-btn'), app.songId, `
+    <div class="menu-sep"></div>
+    <a class="menu-item" href="/api/song/${app.songId}/score.gp?download=1" download><span class="check"></span>Download Guitar Pro file</a>
+    <a class="menu-item" href="/api/song/${app.songId}/raw.json" download><span class="check"></span>Download raw JSON</a>`);
+};
+// The library's song menu reads anchor._song for songs that aren't in the library yet.
+bandApi.onChange(() => { if (app.info) { drawHeader(); drawSetNav(); } });
 
-// ---------- header buttons
-$('home-btn').onclick = showHome;
-$('profile-btn').onclick = () => openProfile(false);
-$('search-toggle').onclick = () => { document.body.classList.toggle('searching'); if (document.body.classList.contains('searching')) $('q').focus(); };
-
-// ---------- stage mode
+// ---------- stage mode (band play): fullscreen, screen awake, only the music and navigation
 let wakeLock = null;
 async function toggleStage(on = !document.body.classList.contains('stage')) {
   document.body.classList.toggle('stage', on);
+  $('stage-btn').innerHTML = icon(on ? 'shrink' : 'expand');
   try {
-    if (on) wakeLock = await navigator.wakeLock?.request('screen');
-    else { await wakeLock?.release(); wakeLock = null; }
-  } catch { /* needs HTTPS or localhost; ignore on plain LAN http */ }
-  if (on && !navigator.wakeLock && !window.isSecureContext) toast('Tip: turn off auto-lock on this device so the screen stays on');
+    if (on) { await document.documentElement.requestFullscreen?.(); wakeLock = await navigator.wakeLock?.request('screen'); }
+    else { if (document.fullscreenElement) await document.exitFullscreen(); await wakeLock?.release(); wakeLock = null; }
+  } catch { /* not supported or not allowed */ }
 }
 $('stage-btn').onclick = () => toggleStage();
-$('stage-exit').onclick = () => toggleStage(false);
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && document.body.classList.contains('stage')) toggleStage(false); });
 
-// ---------- keyboard
+// ---------- keyboard (and page-turner pedals, which send PageDown/PageUp)
 document.addEventListener('keydown', (e) => {
   const tag = e.target.tagName;
   if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || document.querySelector('dialog[open]')) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
-  if (e.key === '/') { e.preventDefault(); document.body.classList.add('searching'); $('q').focus(); return; }
-  if (e.key === '?') { $('keys-dlg').showModal(); return; }
   if (e.key === 'Escape') {
-    if ($('drawer').classList.contains('open')) return openDrawer(false);
+    if (popoverOpen()) return closePopover();
     if (document.body.classList.contains('stage')) return toggleStage(false);
     if (app.spot) return closeSpot();
     return;
   }
-  if (document.body.dataset.view !== 'song') return;
-  const k = e.key.toLowerCase();
+  if (e.key === '/') { e.preventDefault(); if (document.body.dataset.screen !== 'library') navigate(''); setTimeout(() => $('q').focus()); return; }
+  if (document.body.dataset.screen !== 'song') return;
+  const vp = $('viewport');
   const actions = {
     ' ': playPause,
-    arrowleft: () => stepSection(-1),
-    arrowright: () => stepSection(1),
+    ArrowLeft: () => stepSection(-1),
+    ArrowRight: () => stepSection(1),
+    PageDown: () => vp.scrollBy({ top: vp.clientHeight * 0.8, behavior: 'smooth' }),
+    PageUp: () => vp.scrollBy({ top: -vp.clientHeight * 0.8, behavior: 'smooth' }),
     l: () => $('t-loop').click(),
     '[': () => setSpeed(app.speed - 0.05),
     ']': () => setSpeed(app.speed + 0.05),
     a: () => practice.missed(),
-    b: () => setMode(MODES[(MODES.indexOf(app.mode) + 1) % MODES.length]),
-    c: () => $('t-count').click(),
-    m: () => $('t-metro').click(),
-    t: () => openDrawer(!$('drawer').classList.contains('open')),
+    c: toggleCount,
+    m: toggleClick,
+    n: () => stepSet(1),
+    p: () => stepSet(-1),
     f: () => toggleStage(),
   };
-  if (actions[k]) { e.preventDefault(); actions[k](); }
+  const fn = actions[e.key] ?? actions[e.key.toLowerCase()];
+  if (fn) { e.preventDefault(); fn(); }
 });
 
-// ---------- boot
+// ================= boot =================
 await store.init();
-home.init((id) => openSong(id));
-drawProfileChip();
-applyToggles();
-const hash = new URLSearchParams(location.hash.slice(1));
-if (hash.get('song')) openSong(Number(hash.get('song'))); else home.render();
-if (!store.profile()) openProfile(true);
-window.addEventListener('hashchange', () => {
-  const id = Number(new URLSearchParams(location.hash.slice(1)).get('song'));
-  if (id && id !== app.songId) openSong(id);
-});
+applySheet();
+drawWho();
+library.init({ navigate });
+try { await bandApi.refresh(); } catch (e) { toast('Could not load the band library'); }
+addEventListener('hashchange', route);
+route();
+if (!store.profile()) whoDialog({ required: true });

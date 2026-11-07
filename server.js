@@ -4,13 +4,14 @@ import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { search, getMeta, getSong, cachedSongs, CACHE, UpstreamError } from './src/songsterr.js';
+import { search, getMeta, getSong, CACHE, UpstreamError } from './src/songsterr.js';
 import { songsterrToScore, scoreToGp7, CONVERTER_VERSION } from './src/convert.js';
 import { roleOf, partNames, isDrumTrack, displayTuning } from './src/tracks.js';
+import * as band from './src/band.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
-const HOST = process.env.HOST || '0.0.0.0'; // reachable by bandmates on the LAN
+const HOST = process.env.HOST || '0.0.0.0'; // reachable on the LAN or through a tunnel
 const ALPHATAB = path.join(ROOT, 'node_modules/@coderline/alphatab/dist');
 const SOUNDFONT = [path.join(ROOT, 'soundfonts/MuseScore_General.sf3'), path.join(ALPHATAB, 'soundfont/sonivox.sf2')].find(existsSync);
 
@@ -23,7 +24,7 @@ app.get('/soundfont', (req, res) => res.sendFile(SOUNDFONT, { maxAge: '30d', hea
 const wrap = (fn) => (req, res) =>
   fn(req, res).catch((err) => {
     console.error(err);
-    res.status(err instanceof UpstreamError ? 502 : 500).json({ error: err.message });
+    res.status(err instanceof UpstreamError ? 502 : err.status || 500).json({ error: err.message });
   });
 
 function trackInfo(meta, parts) {
@@ -43,7 +44,7 @@ function trackInfo(meta, parts) {
   }));
 }
 
-// Built scores: memory first, then disk (survives Pi restarts), then build from Songsterr data.
+// Built scores: memory first, then disk (survives restarts), then build from Songsterr data.
 const built = new Map();
 async function build(songId) {
   if (built.has(songId)) return built.get(songId);
@@ -82,15 +83,15 @@ app.get('/api/search', wrap(async (req, res) => {
   res.json(await search(q));
 }));
 
-// Songs already on this server (pulled by anyone in the band), newest first.
-app.get('/api/library', wrap(async (req, res) => {
-  const metas = await cachedSongs();
-  const withTime = await Promise.all(metas.map(async (m) => {
-    const st = await fs.stat(path.join(CACHE, String(m.songId), 'meta.json')).catch(() => null);
-    return { songId: m.songId, title: m.title, artist: m.artist, added: st?.mtimeMs ?? 0 };
-  }));
-  res.json(withTime.sort((a, b) => b.added - a.added));
-}));
+// Shared band library + setlists.
+const sendBand = (res) => (st) => res.json(st);
+app.use('/api/band', express.json({ limit: '64kb' }));
+app.get('/api/band', wrap(async (req, res) => res.json(await band.get())));
+app.post('/api/band/songs', wrap(async (req, res) => sendBand(res)(await band.addSong(req.body || {}))));
+app.delete('/api/band/songs/:id', wrap(async (req, res) => sendBand(res)(await band.removeSong(req.params.id))));
+app.post('/api/band/setlists', wrap(async (req, res) => { const r = await band.createSetlist(req.body?.name); res.json({ ...r.state, created: r.setlist.id }); }));
+app.patch('/api/band/setlists/:id', wrap(async (req, res) => sendBand(res)(await band.updateSetlist(req.params.id, req.body || {}))));
+app.delete('/api/band/setlists/:id', wrap(async (req, res) => sendBand(res)(await band.deleteSetlist(req.params.id))));
 
 app.get('/api/song/:id', wrap(async (req, res) => res.json((await build(Number(req.params.id))).info)));
 

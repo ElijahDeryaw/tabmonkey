@@ -1,10 +1,10 @@
 // What you play → which track is yours, and human tuning names ("Drop D", "½ step down").
 export const INSTRUMENTS = [
-  { id: 'guitar', label: 'Guitar', icon: '🎸' },
-  { id: 'bass', label: 'Bass', icon: '🎸' },
-  { id: 'drums', label: 'Drums', icon: '🥁' },
-  { id: 'vocals', label: 'Vocals', icon: '🎤' },
-  { id: 'keys', label: 'Keys', icon: '🎹' },
+  { id: 'guitar', label: 'Guitar' },
+  { id: 'bass', label: 'Bass' },
+  { id: 'drums', label: 'Drums' },
+  { id: 'vocals', label: 'Vocals' },
+  { id: 'keys', label: 'Keys' },
 ];
 
 /**

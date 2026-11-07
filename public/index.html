@@ -3,119 +3,120 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#16161a">
+<meta name="theme-color" content="#f6f6f4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121211" media="(prefers-color-scheme: dark)">
 <title>Tabs</title>
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="/styles.css">
 </head>
-<body data-view="home">
-<header class="top">
-  <button id="home-btn" class="brand" title="Home"><span class="logo">𝄞</span><span class="brand-name">Tabs</span></button>
-  <div class="search">
-    <input id="q" type="search" placeholder="Find a song or artist" autocomplete="off" enterkeyhint="search" aria-label="Search songs">
-    <kbd class="search-key">/</kbd>
-    <div id="results" role="listbox"></div>
-  </div>
-  <button id="song-title" class="song-title" title="Tracks, mix &amp; view (T)">
-    <span class="st-main"><span class="st-t"></span><span class="st-a"></span></span>
-    <span id="st-part" class="st-part"></span>
-  </button>
-  <button id="search-toggle" class="icon-btn" aria-label="Search">⌕</button>
-  <button id="stage-btn" class="icon-btn" title="Stage mode (F)" aria-label="Stage mode">⛶</button>
-  <button id="profile-btn" class="profile-chip" title="Switch player"></button>
-</header>
+<body data-screen="library">
 
-<main id="home" class="home">
-  <div class="hello">
-    <h1 id="hello">Hey there</h1>
-    <p id="hello-sub" class="muted"></p>
-  </div>
-  <div id="continue"></div>
-  <section id="mine-wrap" hidden><h2>Your songs</h2><div id="mine" class="song-list"></div></section>
-  <section id="lib-wrap" hidden><h2>On this Pi <span class="muted small">— pulled by the band</span></h2><div id="lib" class="song-list"></div></section>
-</main>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="m10.25 10.25 3.25 3.25" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-chev-left" viewBox="0 0 16 16"><path d="M10 3.5 5.5 8l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-chev-right" viewBox="0 0 16 16"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-chev-down" viewBox="0 0 16 16"><path d="M4 6.25 8 10.25l4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-play" viewBox="0 0 16 16"><path d="M4.75 3.1v9.8c0 .5.55.8.97.53l7.6-4.9a.63.63 0 0 0 0-1.06l-7.6-4.9a.63.63 0 0 0-.97.53Z" fill="currentColor"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 16 16"><rect x="3.75" y="3" width="3" height="10" rx=".75" fill="currentColor"/><rect x="9.25" y="3" width="3" height="10" rx=".75" fill="currentColor"/></symbol>
+    <symbol id="i-start" viewBox="0 0 16 16"><path d="M3.75 3.5v9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M12.5 4.04v7.92c0 .47-.53.75-.92.48L6 8.48a.58.58 0 0 1 0-.96l5.58-3.96c.39-.27.92.01.92.48Z" fill="currentColor"/></symbol>
+    <symbol id="i-loop" viewBox="0 0 16 16"><path d="M2.75 8V7a2.75 2.75 0 0 1 2.75-2.75h7.75m0 0-2-2m2 2-2 2M13.25 8v1a2.75 2.75 0 0 1-2.75 2.75H2.75m0 0 2-2m-2 2 2 2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-click" viewBox="0 0 16 16"><path d="M5.6 2.75h4.8l2.35 10.5H3.25Z M8 10.5l3.6-6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+    <symbol id="i-more" viewBox="0 0 16 16"><circle cx="3.5" cy="8" r="1.25" fill="currentColor"/><circle cx="8" cy="8" r="1.25" fill="currentColor"/><circle cx="12.5" cy="8" r="1.25" fill="currentColor"/></symbol>
+    <symbol id="i-expand" viewBox="0 0 16 16"><path d="M2.75 6V2.75H6M10 2.75h3.25V6M13.25 10v3.25H10M6 13.25H2.75V10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-shrink" viewBox="0 0 16 16"><path d="M6 2.75V6H2.75M13.25 6H10V2.75M10 13.25V10h3.25M2.75 10H6v3.25" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3.25v9.5M3.25 8h9.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 16 16"><path d="M3.25 8h9.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-x" viewBox="0 0 16 16"><path d="m4.25 4.25 7.5 7.5m0-7.5-7.5 7.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-check" viewBox="0 0 16 16"><path d="m3.5 8.5 3 3 6-7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-grip" viewBox="0 0 16 16"><g fill="currentColor"><circle cx="6" cy="4" r="1"/><circle cx="10" cy="4" r="1"/><circle cx="6" cy="8" r="1"/><circle cx="10" cy="8" r="1"/><circle cx="6" cy="12" r="1"/><circle cx="10" cy="12" r="1"/></g></symbol>
+    <symbol id="i-mix" viewBox="0 0 16 16"><path d="M5 2.75v10.5M11 2.75v10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><rect x="3" y="8.5" width="4" height="2.5" rx=".75" fill="currentColor"/><rect x="9" y="4.5" width="4" height="2.5" rx=".75" fill="currentColor"/></symbol>
+    <symbol id="i-type" viewBox="0 0 16 16"><path d="M2.5 12.5 5.75 3.5 9 12.5M3.6 9.6h4.3M10.5 7.75c.4-.6 1-.9 1.75-.9 1.1 0 1.75.6 1.75 1.65v4M14 10.25c-.5-.2-1.1-.3-1.7-.3-1.1 0-1.8.55-1.8 1.35s.6 1.3 1.45 1.3c1 0 1.7-.6 2.05-1.3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  </defs>
+</svg>
 
-<main id="song-view" class="song-view">
-  <nav id="sections" class="sections" aria-label="Sections"></nav>
-  <div id="viewport" class="viewport">
-    <button id="stage-exit" class="icon-btn stage-exit" title="Leave stage mode (F)" aria-label="Leave stage mode">✕</button>
-    <div id="sheet" class="sheet"></div>
-    <div id="loading" class="loading" hidden><div class="spinner"></div><span id="loading-msg">Loading…</span></div>
+<!-- ============ Library ============ -->
+<div id="library" class="screen">
+  <header class="bar">
+    <a class="wordmark" href="#">Tabs</a>
+    <div class="search">
+      <svg class="i search-icon" aria-hidden="true"><use href="#i-search"/></svg>
+      <input id="q" type="search" placeholder="Find a song to add" autocomplete="off" enterkeyhint="search" aria-label="Find a song">
+      <kbd class="search-kbd">/</kbd>
+    </div>
+    <button class="btn ghost who" id="who-btn" aria-haspopup="menu"></button>
+  </header>
+  <div class="lib">
+    <nav class="side" aria-label="Library">
+      <a class="side-item" href="#" data-nav="songs"><span>Songs</span><span class="count" id="count-songs"></span></a>
+      <div class="side-head"><span>Setlists</span><button class="btn icon ghost sm" id="new-set" title="New setlist" aria-label="New setlist"><svg class="i"><use href="#i-plus"/></svg></button></div>
+      <div id="side-sets"></div>
+    </nav>
+    <main class="lib-main" id="lib-main"></main>
   </div>
-  <div id="practice" class="practice" hidden></div>
+</div>
+
+<!-- ============ Song ============ -->
+<div id="song" class="screen">
+  <header class="bar songbar">
+    <button class="btn ghost back" id="back"><svg class="i"><use href="#i-chev-left"/></svg><span id="back-label">Songs</span></button>
+    <div class="song-id"><span id="s-title"></span><span id="s-artist"></span></div>
+    <button class="btn part" id="part-btn" aria-haspopup="menu"><span id="part-name"></span><span id="part-meta" class="meta"></span><svg class="i"><use href="#i-chev-down"/></svg></button>
+    <div class="grow"></div>
+    <div class="setnav" id="setnav" hidden>
+      <button class="btn icon ghost" id="set-prev" aria-label="Previous song in setlist"><svg class="i"><use href="#i-chev-left"/></svg></button>
+      <span id="set-pos" class="meta"></span>
+      <button class="btn icon ghost" id="set-next" aria-label="Next song in setlist"><svg class="i"><use href="#i-chev-right"/></svg></button>
+    </div>
+    <button class="btn" id="add-song" hidden><svg class="i"><use href="#i-plus"/></svg>Add to songs</button>
+    <button class="btn icon ghost" id="view-btn" title="View" aria-label="View options" aria-haspopup="menu"><svg class="i"><use href="#i-type"/></svg></button>
+    <button class="btn icon ghost" id="more-btn" title="More" aria-label="More" aria-haspopup="menu"><svg class="i"><use href="#i-more"/></svg></button>
+    <button class="btn icon ghost" id="stage-btn" title="Stage mode (F)" aria-label="Stage mode"><svg class="i"><use href="#i-expand"/></svg></button>
+  </header>
+  <div class="map" id="map" aria-label="Song sections"><div class="map-track" id="map-track"></div></div>
+  <div class="viewport" id="viewport">
+    <div class="sheet" id="sheet"></div>
+    <div class="loading" id="loading" hidden><span class="spinner"></span><span id="loading-msg"></span></div>
+  </div>
+  <div class="practice" id="practice" hidden></div>
   <footer class="transport">
-    <div class="tgroup">
-      <button id="t-back" class="tbtn" title="Back to start of section (←)" aria-label="Back to section start">⏮</button>
-      <button id="t-play" class="tbtn play" disabled title="Play / pause (Space)" aria-label="Play">▶</button>
-      <span id="t-time" class="time">0:00</span>
+    <div class="t-play">
+      <button class="btn icon" id="t-start" title="Back to start of section or loop" aria-label="Back to start"><svg class="i"><use href="#i-start"/></svg></button>
+      <button class="btn play" id="t-play" disabled title="Play / pause (Space)" aria-label="Play"><svg class="i"><use href="#i-play"/></svg></button>
+      <span class="time" id="t-time">0:00</span>
     </div>
-    <div class="tgroup speed" title="Playback speed ([ and ])">
-      <button id="sp-down" class="tbtn sm" aria-label="Slower">−</button>
-      <button id="sp-val" class="speed-val" title="Reset to 100%"><b>100%</b><small id="sp-bpm"></small></button>
-      <button id="sp-up" class="tbtn sm" aria-label="Faster">+</button>
+    <div class="t-tools">
+      <button class="btn toggle" id="t-loop" aria-pressed="false" title="Loop the current section (L)"><svg class="i"><use href="#i-loop"/></svg>Loop</button>
+      <div class="stepper" title="Tempo ( [ and ] )">
+        <button class="btn icon ghost" id="sp-down" aria-label="Slower"><svg class="i"><use href="#i-minus"/></svg></button>
+        <button class="tempo" id="sp-val" title="Reset to 100%"><span id="sp-pct">100%</span><span id="sp-bpm" class="meta"></span></button>
+        <button class="btn icon ghost" id="sp-up" aria-label="Faster"><svg class="i"><use href="#i-plus"/></svg></button>
+      </div>
+      <button class="btn toggle" id="t-count" aria-pressed="false" title="Count in before playing (C)">Count-in</button>
+      <button class="btn toggle" id="t-click" aria-pressed="false" title="Metronome (M)"><svg class="i"><use href="#i-click"/></svg>Click</button>
     </div>
-    <div class="tgroup">
-      <button id="t-loop" class="tog" title="Loop the current section (L)">⟲ Loop</button>
-      <button id="t-count" class="tog" title="Count-in before playing (C)">Count-in</button>
-      <button id="t-metro" class="tog" title="Metronome click (M)">Click</button>
+    <div class="t-mix">
+      <label class="fader"><span>You</span><input type="range" id="mix-me" min="0" max="100" step="1" aria-label="Your part volume"></label>
+      <label class="fader"><span>Band</span><input type="range" id="mix-band" min="0" max="100" step="1" aria-label="Band volume"></label>
+      <button class="btn icon" id="mix-btn" aria-label="Mix" aria-haspopup="menu"><svg class="i"><use href="#i-mix"/></svg></button>
     </div>
-    <div class="seg" id="band-mode" role="radiogroup" aria-label="What you hear">
-      <button data-mode="full" class="on" title="Everyone plays">Full band</button>
-      <button data-mode="along" title="Your part is muted: you play it over the band (B)">Play along</button>
-      <button data-mode="solo" title="Only your part, to hear exactly how it goes">Just me</button>
-    </div>
-    <div id="sf-status" class="sf-status" hidden><div class="sf-bar"><i></i></div><span>Loading sounds</span></div>
+    <div class="sf" id="sf" hidden><span class="sf-bar"><i></i></span>Loading sounds</div>
   </footer>
-</main>
+</div>
 
-<aside id="drawer" class="drawer" aria-label="Tracks and view">
-  <div class="drawer-head"><h2>Tracks &amp; mix</h2><button class="icon-btn" data-close aria-label="Close">✕</button></div>
-  <p class="muted small">Tap a track to make it yours. <span class="desk">Ctrl/⌘-click</span><span class="touch">Long-press</span> to show several together.</p>
-  <div id="tracks" class="tracks"></div>
-  <h3>View</h3>
-  <div class="seg wide" id="view-seg">
-    <button data-view="tab">Tab</button><button data-view="both">Tab + Notes</button><button data-view="notation">Notation</button>
-  </div>
-  <div class="row">
-    <div class="seg" id="layout-seg"><button data-layout="Page">Page</button><button data-layout="Horizontal">One line</button></div>
-    <div class="zoom"><button class="tbtn sm" id="z-out" aria-label="Zoom out">−</button><span id="z-val">100%</span><button class="tbtn sm" id="z-in" aria-label="Zoom in">+</button></div>
-  </div>
-  <h3>Data</h3>
-  <div class="row"><a class="btn" id="dl-gp" href="#" download>Guitar Pro file</a><a class="btn" id="dl-json" href="#" download>Raw Songsterr JSON</a></div>
-</aside>
-<div id="scrim" class="scrim"></div>
-
-<dialog id="profile-dlg" class="dlg">
-  <form method="dialog" id="profile-form">
+<dialog id="who" class="dialog">
+  <form method="dialog" id="who-form">
     <h2>Who's playing?</h2>
-    <div id="profile-list" class="profile-list"></div>
-    <label class="field"><span>Your name</span><input id="p-name" required maxlength="24" autocomplete="nickname" placeholder="e.g. Eli"></label>
-    <span class="field-label">You play</span>
-    <div id="p-inst" class="inst-grid"></div>
-    <p class="muted small">Your track opens automatically in every song, and your practice progress is saved on this device.</p>
-    <div class="dlg-actions"><button class="btn primary" id="p-save" value="save">Let's play</button></div>
+    <p class="meta">Your part opens first in every song. Practice progress is kept on this device.</p>
+    <label class="field"><span>Name</span><input id="who-name" required maxlength="24" autocomplete="nickname"></label>
+    <div class="field"><span>Instrument</span><div class="seg" id="who-inst" role="radiogroup"></div></div>
+    <div class="actions"><button class="btn primary" value="ok">Continue</button></div>
   </form>
-</dialog>
-
-<dialog id="keys-dlg" class="dlg">
-  <h2>Shortcuts</h2>
-  <dl class="keys">
-    <dt><kbd>Space</kbd></dt><dd>Play / pause</dd>
-    <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>Previous / next section</dd>
-    <dt><kbd>L</kbd></dt><dd>Loop the current section</dd>
-    <dt>Drag on the sheet</dt><dd>Loop exactly those bars</dd>
-    <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Slower / faster (5%)</dd>
-    <dt><kbd>A</kbd></dt><dd>Missed it: don't count this pass</dd>
-    <dt><kbd>B</kbd></dt><dd>Cycle Full band → Play along → Just me</dd>
-    <dt><kbd>C</kbd> / <kbd>M</kbd></dt><dd>Count-in / metronome</dd>
-    <dt><kbd>T</kbd></dt><dd>Tracks &amp; mix</dd>
-    <dt><kbd>F</kbd></dt><dd>Stage mode</dd>
-    <dt><kbd>/</kbd></dt><dd>Search</dd>
-    <dt><kbd>Esc</kbd></dt><dd>Stop looping / close</dd>
-  </dl>
-  <form method="dialog" class="dlg-actions"><button class="btn">Got it</button></form>
 </dialog>
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>

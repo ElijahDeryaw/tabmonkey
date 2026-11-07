@@ -1,6 +1,6 @@
 // The only module that touches persistence. Everything is namespaced per player profile so a shared
 // tablet can serve several bandmates. Reads are synchronous against an in-memory snapshot; init() is async so
-// the snapshot can later be hydrated from the Pi (for shared setlists / leader mode) without touching callers.
+// the snapshot could later be hydrated from the server (e.g. for leader mode) without touching callers.
 const KEY = 'tabapp:v1';
 let state = {};
 
@@ -13,6 +13,7 @@ const me = () => state.profiles[state.current];
 
 export const profile = () => (me() ? { name: state.current, instrument: me().instrument } : null);
 export const profileNames = () => Object.keys(state.profiles);
+export const profileInstrument = (name) => state.profiles[name]?.instrument;
 
 export function setProfile(name, instrument) {
   const p = (state.profiles[name] ??= { songs: {}, prefs: {} });

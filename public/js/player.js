@@ -13,11 +13,13 @@ export function create(el, scrollEl, { scale, layout, view }) {
     display: {
       scale, layoutMode: alphaTab.LayoutMode[layout], staveProfile: alphaTab.StaveProfile[VIEW[view]],
       systemPaddingTop: 25, systemPaddingBottom: 15,
+      // Neutral bar numbers: alphaTab's default red competes with the playhead accent.
+      resources: { barNumberColor: '#8c8c86' },
     },
     notation: {
       rhythmMode: alphaTab.TabRhythmMode.ShowWithBars,
       // The app header already shows title/artist; give that space to music.
-      elements: { scoreTitle: false, scoreSubTitle: false, scoreArtist: false, scoreAlbum: false, scoreWords: false, scoreMusic: false, scoreWordsAndMusic: false, scoreCopyright: false },
+      elements: { scoreTitle: false, scoreSubTitle: false, scoreArtist: false, scoreAlbum: false, scoreWords: false, scoreMusic: false, scoreWordsAndMusic: false, scoreCopyright: false, trackNames: false },
     },
     player: {
       playerMode: alphaTab.PlayerMode.EnabledSynthesizer,
@@ -90,8 +92,11 @@ export function barAt(tick) {
 export function render(tracks, view) {
   if (!api?.score || !tracks.length) return;
   const p = view === 'tab' && tracks.some((t) => t.staves[0]?.isPercussion) ? 'Default' : VIEW[view];
-  if (api.settings.display.staveProfile !== alphaTab.StaveProfile[p]) {
+  const names = tracks.length > 1; // staff labels only help when several parts are stacked
+  const els = api.settings.notation.elements;
+  if (api.settings.display.staveProfile !== alphaTab.StaveProfile[p] || els.get(alphaTab.NotationElement.TrackNames) !== names) {
     api.settings.display.staveProfile = alphaTab.StaveProfile[p];
+    els.set(alphaTab.NotationElement.TrackNames, names);
     api.updateSettings();
   }
   api.renderTracks(tracks);
@@ -137,20 +142,29 @@ export function clearLoop() {
   api.isLooping = false;
 }
 
+/** Scroll the sheet so bar i's system is near the top (alphaTab only auto-scrolls while playing). */
+export function scrollToBar(i, scrollEl, sheetEl) {
+  const mb = api?.score?.masterBars[i];
+  const b = mb && api.boundsLookup?.findMasterBar(mb);
+  if (!b) return;
+  const y = (b.lineAlignedBounds ?? b.realBounds ?? b.visualBounds).y;
+  const sheetTop = sheetEl.getBoundingClientRect().top - scrollEl.getBoundingClientRect().top + scrollEl.scrollTop;
+  scrollEl.scrollTo({ top: Math.max(0, sheetTop + y - 64), behavior: 'smooth' });
+}
+
 export function seekBar(i) { if (api && barStarts.length) api.tickPosition = barStart(i); }
 
 /**
- * Apply the band mix. mode: 'full' | 'along' (mute your part) | 'solo' (only your part).
- * mixer: { [scoreTrackIndex]: { vol, mute } }. mine: Set of score track indexes being shown.
+ * Two-fader mix: `me` for the parts you're reading, `band` for everything else (0..1).
+ * `silent` holds score track indexes that never play with the band (synth vocal guide lines).
  */
-export function applyMix(mode, mixer, mine) {
+export function applyMix(me, band, mine, silent) {
   if (!api?.score) return;
   for (const t of api.score.tracks) {
-    const m = mixer[t.index] || {};
     const isMine = mine.has(t.index);
-    api.changeTrackVolume([t], m.vol ?? 1);
-    api.changeTrackSolo([t], mode === 'solo' && isMine);
-    api.changeTrackMute([t], mode === 'along' ? isMine || !!m.mute : mode === 'solo' ? false : !!m.mute);
+    const v = isMine ? me : silent.has(t.index) ? 0 : band;
+    api.changeTrackVolume([t], v);
+    api.changeTrackMute([t], v === 0);
   }
 }
 
