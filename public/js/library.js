@@ -16,6 +16,7 @@ export function init({ navigate }) {
     go(`set=${id}`, { rename: true });
   };
   $('lib-main').addEventListener('click', onMainClick);
+  initShare();
   $('lib-main').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('.row[data-href]')) go(e.target.dataset.href); });
 }
 
@@ -104,6 +105,31 @@ function renderSet(l, rename) {
     inp.onkeydown = (e) => { if (e.key === 'Enter') inp.blur(); if (e.key === 'Escape') { inp.value = l.name; inp.blur(); } };
   }
   enableReorder(l);
+}
+
+// ---------- share: QR code + link for opening the app on another device
+async function initShare() {
+  let info;
+  try { info = await fetch('/api/share').then((r) => r.json()); } catch { return; }
+  $('share-qr').innerHTML = info.svg;
+  $('share-url').textContent = info.url.replace(/^https?:\/\//, '');
+  $('share-url').title = info.url;
+  const mini = document.createElement('button');
+  mini.className = 'btn share-mini';
+  mini.innerHTML = `${icon('expand')}Share`;
+  mini.title = 'Show the QR code for opening this on another device';
+  document.getElementById('library').append(mini);
+  const show = (on) => {
+    $('share').hidden = !on; mini.hidden = on;
+    store.setDevice('shareHidden', !on);
+  };
+  show(!store.device('shareHidden', false));
+  $('share-close').onclick = () => show(false);
+  mini.onclick = () => show(true);
+  $('share-copy').onclick = async () => {
+    try { await navigator.clipboard.writeText(info.url); toast('Link copied'); }
+    catch { toast(info.url); }
+  };
 }
 
 // ---------- actions

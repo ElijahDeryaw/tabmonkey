@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import QRCode from 'qrcode';
 import { search, getMeta, getSong, CACHE, UpstreamError } from './src/songsterr.js';
 import { songsterrToScore, scoreToGp7, CONVERTER_VERSION } from './src/convert.js';
 import { roleOf, partNames, isDrumTrack, displayTuning } from './src/tracks.js';
@@ -106,6 +107,22 @@ app.get('/api/search', wrap(async (req, res) => {
   const q = String(req.query.q || '').trim();
   if (!q) return res.status(400).json({ error: 'Missing ?q=' });
   res.json(await search(q));
+}));
+
+// Link + QR code for opening the app on another device: the tunnel's public link when `npm start` made one,
+// otherwise this machine's address on the local network.
+function lanAddress() {
+  const addrs = Object.entries(os.networkInterfaces())
+    .filter(([name]) => !/vEthernet|WSL|Hyper-V|VirtualBox|VMware|docker/i.test(name))
+    .flatMap(([, list]) => list || [])
+    .filter((a) => a.family === 'IPv4' && !a.internal && !a.address.startsWith('169.254.'));
+  return (addrs.find((a) => /^(192\.168|10\.)/.test(a.address)) ?? addrs[0])?.address;
+}
+app.get('/api/share', wrap(async (req, res) => {
+  const lan = lanAddress();
+  const url = process.env.PUBLIC_URL || (lan ? `http://${lan}:${PORT}` : `http://localhost:${PORT}`);
+  const svg = await QRCode.toString(url, { type: 'svg', margin: 0, errorCorrectionLevel: 'M', color: { dark: '#000000', light: '#ffffff' } });
+  res.set('Cache-Control', 'no-store').json({ url, public: !!process.env.PUBLIC_URL, svg });
 }));
 
 // Shared band library + setlists.

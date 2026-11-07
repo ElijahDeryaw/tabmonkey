@@ -17,7 +17,7 @@ npm run soundfont   # one-time ~32 MB download of GeneralUser GS (free to use) f
 npm start           # the app + a temporary Cloudflare tunnel; prints a public https link
 ```
 
-`npm start` serves the app on port 3000 and shares it through a Cloudflare quick tunnel. Open the printed `https://….trycloudflare.com` link on a phone or tablet. HTTPS also lets stage mode keep the screen awake. The link changes each time you start. Ctrl+C stops both.
+`npm start` serves the app on port 3000 and shares it through a Cloudflare quick tunnel. It prints the `https://….trycloudflare.com` link with a QR code you can scan from the terminal. The same QR code sits in the bottom-right of the library screen, so you can hop between devices or hand it to a bandmate. HTTPS also lets stage mode keep the screen awake. The link changes each time you start. Ctrl+C stops both.
 
 - **cloudflared** is found on PATH, or inside WSL on Windows. If it isn't installed, the app still runs on your network only.
 - **Your own Cloudflare setup** (`~/.cloudflared/config.yml`) is left alone: the quick tunnel runs with an empty config.

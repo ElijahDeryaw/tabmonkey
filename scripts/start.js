@@ -6,6 +6,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import QRCode from 'qrcode';
 
 const PORT = Number(process.env.PORT) || 3000;
 process.env.PORT = String(PORT);
@@ -52,7 +53,12 @@ function startTunnel() {
     const m = String(buf).match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
     if (m && !shown) {
       shown = true;
-      console.log(`\n  Public link (anyone with it can open the app):\n  ${m[0]}\n`);
+      process.env.PUBLIC_URL = m[0]; // the app's share card shows this link (see /api/share)
+      QRCode.toString(m[0], { type: 'terminal', small: true, errorCorrectionLevel: 'M' }).then((qr) => {
+        console.log('\n  Public link (anyone with it can open the app). Scan to open it on a phone or tablet:\n');
+        console.log(qr.replace(/^/gm, '  '));
+        console.log(`  ${m[0]}\n`);
+      });
     }
     if (/ERR .*(failed|error)/i.test(buf) && !/config.*empty/i.test(buf)) process.stderr.write(`[tunnel] ${String(buf).trim()}\n`);
   };
