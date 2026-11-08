@@ -219,6 +219,7 @@ async function openSong(id, setId, { fresh = false } = {}) {
   drawSetNav();
   if (id === app.songId && !fresh) { drawHeader(); return; }
   if (api && app.playing) api.stop();
+  app.ready = { render: false, midi: false }; // a play press from now on waits for this song
   closeSpot(false);
   // Drop the previous song's loop range, or alphaTab tries to draw it on the new song before it's laid out.
   if (api) { api.isLooping = false; api.playbackRange = null; api.clearPlaybackRangeHighlight(); }
@@ -355,13 +356,13 @@ function createApi() {
     if (!app.ready.render) { app.ready.render = true; maybeResume(); }
     else if (app.spot) player.highlightBars(app.spot.start, app.spot.end);
   });
-  api.midiLoaded.on(() => { app.ready.midi = true; applyMix(); applyTransposition(); maybeResume(); });
+  api.midiLoaded.on(() => { app.ready.midi = true; applyMix(); applyTransposition(); maybeResume(); if (wantPlay) setTimeout(() => startPlayback(), 50); });
   api.error.on((e) => { loading(null); toast('Could not draw this song'); console.error(e); });
   api.soundFontLoad.on((e) => {
     $('sf').hidden = false;
     $('sf').querySelector('i').style.width = `${Math.round((e.loaded / (e.total || 1)) * 100)}%`;
   });
-  api.playerReady.on(() => { $('sf').hidden = true; $('t-play').disabled = false; applyMix(); applyToggles(); });
+  api.playerReady.on(() => { $('sf').hidden = true; $('t-play').disabled = false; applyMix(); applyToggles(); if (wantPlay) setTimeout(() => startPlayback(), 50); });
   api.playerStateChanged.on((e) => {
     app.playing = e.state === 1;
     $('t-play').innerHTML = icon(app.playing ? 'pause' : 'play');
@@ -370,7 +371,7 @@ function createApi() {
   api.playerPositionChanged.on(onPosition);
   api.playbackRangeChanged.on((e) => onRange(e.playbackRange));
   api.playerFinished.on(onFinished);
-  player.enableTouchSelect($('sheet'), () => native.haptic());
+  player.enableTouchSelect($('sheet'), () => native.haptic(), { onBeat: native.tick });
 }
 
 // Touch screens: say once how to loop a passage, since there's no mouse to drag with.
@@ -395,6 +396,7 @@ function maybeResume() {
 
 // ---------- position, passes, loop range
 function onPosition(e) {
+  lastTick = e.currentTick;
   $('t-time').innerHTML = `${fmt(e.currentTime)} <span class="meta">/ ${fmt(e.endTime)}</span>`;
   const bar = player.barAt(e.currentTick);
   const idx = sectionAt(app.sections, bar);
@@ -549,7 +551,47 @@ function applyToggles() {
 const toggleCount = () => { store.setPref('countIn', !store.pref('countIn', true)); applyToggles(); };
 const toggleClick = () => { store.setPref('metronome', !store.pref('metronome', false)); applyToggles(); };
 
-function playPause() { if (api && !$('t-play').disabled) { native.haptic(); api.playPause(); } }
+// ---------- play / pause, robustly
+// Ask for exactly what the button shows (never toggle: a toggle flips the wrong way if alphaTab's state and ours
+// ever disagree). If the song isn't ready yet (just opened, or re-built after a key change) the press is kept and
+// playback starts the moment it is. If the audio doesn't actually start (iOS suspends it after sleep, calls or
+// switching apps), wake it and try once more.
+let wantPlay = false, startCheck = null, lastTick = -1;
+function playPause() {
+  if (!api || $('t-play').disabled) return;
+  native.haptic();
+  if (app.playing || wantPlay) { wantPlay = false; drawPlayWaiting(); api.pause(); return; }
+  startPlayback();
+}
+function startPlayback(retry = false) {
+  wakeAudio();
+  if (!api.isReadyForPlayback || !app.ready.midi) { wantPlay = true; drawPlayWaiting(); return; } // still loading this song
+  wantPlay = false; drawPlayWaiting();
+  api.play();
+  // Did sound actually start? The audio clock only runs while the device is producing sound (a count-in counts),
+  // so check it rather than the playhead.
+  clearTimeout(startCheck);
+  const ctx = audioContext(), t0 = ctx?.currentTime ?? 0, from = lastTick;
+  startCheck = setTimeout(() => {
+    if (!app.playing) return;
+    const running = ctx ? ctx.state === 'running' && ctx.currentTime - t0 > 0.4 : lastTick !== from;
+    if (running) return;
+    api.pause();
+    if (!retry) setTimeout(() => startPlayback(true), 150);
+    else toast('Sound didn’t start. Tap play again.');
+  }, 1100);
+}
+const audioContext = () => { try { return api?.player?.output?.context ?? null; } catch { return null; } };
+function wakeAudio() {
+  try {
+    const ctx = audioContext();
+    if (ctx && ctx.state !== 'running') ctx.resume(); // inside the tap, so iOS allows it
+    api.player?.output?.activate?.();
+  } catch { /* not available */ }
+}
+function drawPlayWaiting() { $('t-play').classList.toggle('waiting', wantPlay); }
+// Leaving the app pauses (iOS stops web audio in the background anyway), so the button never lies.
+document.addEventListener('visibilitychange', () => { if (document.hidden && api && app.playing) api.pause(); });
 $('t-play').onclick = playPause;
 $('t-start').onclick = () => {
   if (app.spot) return player.seekBar(app.spot.start);

@@ -265,7 +265,7 @@ export function applyMix(me, band, mine, silent) {
  * A quick swipe still scrolls. iOS long-press behaviours (text selection, the loupe, callouts) are switched off on the
  * sheet in CSS, otherwise they cancel the touch. Dragging near the top or bottom edge scrolls the sheet along.
  */
-export function enableTouchSelect(surfaceEl, onDone, scrollEl = surfaceEl.parentElement) {
+export function enableTouchSelect(surfaceEl, onDone, { onBeat, scrollEl = surfaceEl.parentElement } = {}) {
   let timer = null, startBeat = null, endBeat = null, selecting = false, x0 = 0, y0 = 0, lastTouch = null, raf = 0;
   const beatAt = (pt) => {
     const surface = surfaceEl.querySelector('.at-surface') || surfaceEl;
@@ -276,7 +276,7 @@ export function enableTouchSelect(surfaceEl, onDone, scrollEl = surfaceEl.parent
   const extend = () => {
     if (!selecting || !lastTouch) return;
     const b = beatAt(lastTouch);
-    if (b && b !== endBeat) { endBeat = b; api.highlightPlaybackRange(...order(startBeat, endBeat)); }
+    if (b && b !== endBeat) { endBeat = b; api.highlightPlaybackRange(...order(startBeat, endBeat)); onBeat?.(); } // a tick per beat crossed
   };
   const edgeScroll = () => {
     raf = 0;
@@ -297,9 +297,9 @@ export function enableTouchSelect(surfaceEl, onDone, scrollEl = surfaceEl.parent
       if (!startBeat) return;
       selecting = true;
       surfaceEl.classList.add('selecting');
-      navigator.vibrate?.(15);
+      onBeat?.();
       api.highlightPlaybackRange(startBeat, startBeat);
-    }, 320);
+    }, 190); // a short, deliberate hold; any earlier movement is a scroll
   }, { passive: true });
   surfaceEl.addEventListener('touchmove', (e) => {
     const t = e.touches[0];

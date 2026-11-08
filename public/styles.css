@@ -865,3 +865,6 @@ html[data-swiping] #lib-main { position: relative; z-index: 5; box-shadow: -1px 
   .touch .practice { bottom: calc(var(--float-bottom) + 62px); min-height: 44px; }
   .touch .viewport { padding-bottom: calc(var(--float-bottom) + 70px); }
 }
+/* Play pressed before the song was ready: a quiet ring until it starts */
+.btn.play.waiting { position: relative; }
+.btn.play.waiting::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid transparent; border-top-color: var(--text-2); animation: spin .8s linear infinite; }

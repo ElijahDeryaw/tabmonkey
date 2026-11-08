@@ -30,6 +30,15 @@ export function haptic() {
   } else navigator.vibrate?.(8);
 }
 
+/** A lighter, rate-limited tick for continuous gestures (one per beat while dragging a loop). */
+let lastTick = 0;
+export function tick() {
+  const now = performance.now();
+  if (now - lastTick < 35) return;
+  lastTick = now;
+  haptic();
+}
+
 // ---------- screen transitions (Safari 18+ / Chrome view transitions); instant elsewhere
 /** depth: tabs 0, a setlist/library 1, a song 2. Deeper pushes in from the right, shallower pops back. */
 let lastDepth = 0;
