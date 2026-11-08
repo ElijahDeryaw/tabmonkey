@@ -183,3 +183,44 @@ async function shareLink() {
   try { await navigator.share({ title: 'TabMonkey session', text: `Join ${p ? possessive(p.name) : 'my'} TabMonkey session`, url }); }
   catch (e) { if (e?.name !== 'AbortError') copyLink(); }
 }
+
+// ---------- tap the QR code to show it big, centred, for scanning across the room; any interaction puts it back
+document.addEventListener('click', (e) => {
+  const q = e.target.closest('.qr');
+  if (q && q.querySelector('svg') && !document.querySelector('.qr-zoom')) zoomQr(q);
+});
+
+function zoomQr(q) {
+  native.haptic();
+  const from = q.getBoundingClientRect();
+  const vw = window.visualViewport?.width ?? innerWidth, vh = window.visualViewport?.height ?? innerHeight;
+  const size = Math.round(Math.min(vw * 0.82, vh * 0.62, 400));
+  const left = (vw - size) / 2, top = (vh - size) / 2 - 18;
+  const layer = document.createElement('div');
+  layer.className = 'qr-zoom';
+  layer.innerHTML = `<div class="qr-zoom-card" style="left:${left}px;top:${top}px;width:${size}px;height:${size}px;padding:${Math.round(size * 0.07)}px">${q.innerHTML}</div>
+    <div class="qr-zoom-caption" style="top:${top + size + 18}px">Scan to join</div>`;
+  const card = layer.firstElementChild;
+  const at = (r) => `translate(${r.left - left}px, ${r.top - top}px) scale(${r.width / size})`;
+  card.style.transform = at(from);
+  document.body.append(layer);
+  q.style.visibility = 'hidden';
+  card.getBoundingClientRect(); // start from the small one
+  requestAnimationFrame(() => { layer.classList.add('in'); card.style.transform = ''; });
+
+  let closing = false;
+  const close = (e) => {
+    e?.stopPropagation?.(); // don't let this tap also close the session menu underneath
+    if (closing) return;
+    closing = true;
+    layer.classList.remove('in');
+    card.style.transform = document.body.contains(q) ? at(q.getBoundingClientRect()) : 'scale(.6)';
+    const done = () => { layer.remove(); q.style.visibility = ''; removeEventListener('keydown', close, true); removeEventListener('wheel', close, true); };
+    card.addEventListener('transitionend', done, { once: true });
+    setTimeout(done, 400);
+  };
+  layer.addEventListener('pointerdown', close);
+  layer.addEventListener('click', (e) => e.stopPropagation());
+  addEventListener('keydown', close, true);
+  addEventListener('wheel', close, { capture: true, passive: true });
+}
