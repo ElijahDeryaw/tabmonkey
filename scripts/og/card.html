@@ -50,7 +50,7 @@
   for (const [x, s, f, hot] of notes) tab.insertAdjacentHTML('beforeend', `<b class="${hot ? 'hot' : ''}" style="left:${x}px;top:${s * 30 + 1}px">${f}</b>`);
   const wrap = document.getElementById('wrap');
   if (kind === 'site') {
-    wrap.innerHTML = `${LOGO}<h1>Tabs for your band.</h1><p>Every song opens on your part. Loop the hard bits,<br>then share your setlists with the room.</p>`;
+    wrap.innerHTML = `${LOGO}<h1>Monkey see, monkey play.</h1><p>Tabs for you and your band.</p>`;
   } else if (kind === 'session') {
     wrap.innerHTML = `${LOGO}<h1>You’re invited<br>to a session.</h1><div class="live">Live now · tap to join</div>`;
     const avs = document.getElementById('avs');
