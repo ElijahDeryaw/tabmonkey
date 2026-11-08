@@ -280,7 +280,7 @@ function createApi() {
     if (songShift() || tuningChoice()) api.loadMidiForScore(); // playback must use the re-fingered pitches
   });
   api.renderFinished.on(() => loading(null));
-  api.postRenderFinished.on(() => { loading(null); drawLabels(); });
+  api.postRenderFinished.on(() => { loading(null); drawLabels(); touchHint(); });
   // Layout bounds exist only after this: resume the last loop, or redraw its highlight for the new layout.
   api.postRenderFinished.on(() => {
     if (!app.ready.render) { app.ready.render = true; maybeResume(); }
@@ -301,7 +301,14 @@ function createApi() {
   api.playerPositionChanged.on(onPosition);
   api.playbackRangeChanged.on((e) => onRange(e.playbackRange));
   api.playerFinished.on(onFinished);
-  player.enableTouchSelect($('sheet'));
+  player.enableTouchSelect($('sheet'), () => {});
+}
+
+// Touch screens: say once how to loop a passage, since there's no mouse to drag with.
+function touchHint() {
+  if (!matchMedia('(pointer: coarse)').matches || store.device('touchHint', false)) return;
+  store.setDevice('touchHint', true);
+  setTimeout(() => toast('Tip: hold on the music, then drag to loop that bit'), 900);
 }
 
 function maybeResume() {
@@ -517,7 +524,8 @@ $('mix-btn').onclick = () => {
     <label class="fader"><span>Band</span><input type="range" data-mix="mix-band" min="0" max="100" value="${mixBand()}" style="--fill:${mixBand()}%"></label>
     <div class="menu-sep"></div>
     <button class="menu-item" data-t="count"><span class="check">${store.pref('countIn', true) ? icon('check') : ''}</span>Count-in</button>
-    <button class="menu-item" data-t="click"><span class="check">${store.pref('metronome', false) ? icon('check') : ''}</span>Click</button>`, {
+    <button class="menu-item" data-t="click"><span class="check">${store.pref('metronome', false) ? icon('check') : ''}</span>Click</button>
+    ${$('t-retune').offsetParent ? '' : `<div class="menu-sep"></div><button class="menu-item" data-t="retune"><span class="check"></span><span class="grow">Retune</span><span class="meta">${esc($('t-retune').textContent.replace(/^Retune ?·? ?/, '') || 'Key and tuning')}</span></button>`}`, {
     align: 'end',
     onClick: (e, m) => {
       const inp = e.target.closest('input[data-mix]');
@@ -529,6 +537,7 @@ $('mix-btn').onclick = () => {
       const t = e.target.closest('[data-t]')?.dataset.t;
       if (t === 'count') { toggleCount(); m.redraw(); }
       if (t === 'click') { toggleClick(); m.redraw(); }
+      if (t === 'retune') { m.close(); setTimeout(retuneMenu, 230); }
     },
   });
 };
@@ -677,7 +686,9 @@ function retuneMenu() {
   const strings = t?.staves[0]?._origTuning?.length ?? t?.staves[0]?.tuning?.length ?? 6;
   const opts = retune.tuningOptions(role, strings);
   const inst = role === 'bass' ? 'bass' : 'guitar';
-  popover($('t-retune'), () => {
+  // On phones the Retune button lives in the mix menu, so open from whichever control is on screen.
+  const anchor = $('t-retune').offsetParent ? $('t-retune') : $('mix-btn');
+  popover(anchor, () => {
     const k = songShift(), choice = tuningChoice(), st = app.retuneStats;
     const staff = t?.staves[0];
     const tun = staff ? describeTuning([...staff.tuning], role) : null;

@@ -5,3 +5,4 @@ data/
 dist/
 .wrangler/
 scripts/og/.card.tmp.html
+scripts/og/.icon.tmp.html

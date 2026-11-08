@@ -260,44 +260,71 @@ export function applyMix(me, band, mine, silent) {
  * Long-press-then-drag selection for touch screens (alphaTab's own drag selection is mouse-only).
  * A plain one-finger drag still scrolls the page.
  */
-export function enableTouchSelect(surfaceEl, onDone) {
-  let timer = null, startBeat = null, endBeat = null, selecting = false, x0 = 0, y0 = 0;
-  const beatAt = (touch) => {
+/**
+ * Touch: hold on the music, then drag across it to loop exactly those beats (like selecting text).
+ * A quick swipe still scrolls. iOS long-press behaviours (text selection, the loupe, callouts) are switched off on the
+ * sheet in CSS, otherwise they cancel the touch. Dragging near the top or bottom edge scrolls the sheet along.
+ */
+export function enableTouchSelect(surfaceEl, onDone, scrollEl = surfaceEl.parentElement) {
+  let timer = null, startBeat = null, endBeat = null, selecting = false, x0 = 0, y0 = 0, lastTouch = null, raf = 0;
+  const beatAt = (pt) => {
     const surface = surfaceEl.querySelector('.at-surface') || surfaceEl;
     const r = surface.getBoundingClientRect();
-    return api?.boundsLookup?.getBeatAtPos(touch.clientX - r.left, touch.clientY - r.top) ?? null;
+    return api?.boundsLookup?.getBeatAtPos(pt.clientX - r.left, pt.clientY - r.top) ?? null;
   };
   const order = (a, b) => (a.absolutePlaybackStart <= b.absolutePlaybackStart ? [a, b] : [b, a]);
+  const extend = () => {
+    if (!selecting || !lastTouch) return;
+    const b = beatAt(lastTouch);
+    if (b && b !== endBeat) { endBeat = b; api.highlightPlaybackRange(...order(startBeat, endBeat)); }
+  };
+  const edgeScroll = () => {
+    raf = 0;
+    if (!selecting || !lastTouch || !scrollEl) return;
+    const r = scrollEl.getBoundingClientRect(), edge = 70, y = lastTouch.clientY;
+    const v = y < r.top + edge ? -(r.top + edge - y) / 5 : y > r.bottom - edge ? (y - (r.bottom - edge)) / 5 : 0;
+    if (v) { scrollEl.scrollTop += v; extend(); raf = requestAnimationFrame(edgeScroll); }
+  };
   surfaceEl.addEventListener('touchstart', (e) => {
-    if (e.touches.length !== 1) return;
-    const t = e.touches[0]; x0 = t.clientX; y0 = t.clientY;
+    if (e.touches.length !== 1) { clearTimeout(timer); return; }
+    const t = e.touches[0];
+    x0 = t.clientX; y0 = t.clientY;
+    lastTouch = { clientX: t.clientX, clientY: t.clientY };
+    clearTimeout(timer);
     timer = setTimeout(() => {
-      startBeat = endBeat = beatAt(t);
+      timer = null;
+      startBeat = endBeat = beatAt(lastTouch);
       if (!startBeat) return;
       selecting = true;
+      surfaceEl.classList.add('selecting');
       navigator.vibrate?.(15);
       api.highlightPlaybackRange(startBeat, startBeat);
-    }, 350);
+    }, 320);
   }, { passive: true });
   surfaceEl.addEventListener('touchmove', (e) => {
     const t = e.touches[0];
+    lastTouch = { clientX: t.clientX, clientY: t.clientY };
     if (!selecting) {
-      if (Math.hypot(t.clientX - x0, t.clientY - y0) > 10) clearTimeout(timer);
+      if (timer && Math.hypot(t.clientX - x0, t.clientY - y0) > 10) { clearTimeout(timer); timer = null; } // it's a scroll
       return;
     }
-    e.preventDefault(); // keep the page still while selecting
-    const b = beatAt(t);
-    if (b && b !== endBeat) { endBeat = b; api.highlightPlaybackRange(...order(startBeat, endBeat)); }
+    e.preventDefault(); // keep the sheet still while selecting
+    extend();
+    if (!raf) raf = requestAnimationFrame(edgeScroll);
   }, { passive: false });
-  const end = () => {
-    clearTimeout(timer);
+  const end = (e) => {
+    clearTimeout(timer); timer = null;
+    cancelAnimationFrame(raf); raf = 0;
     if (!selecting) return;
     selecting = false;
+    surfaceEl.classList.remove('selecting');
+    e?.preventDefault?.(); // no synthetic click (which would seek and clear the loop)
     api.highlightPlaybackRange(...order(startBeat, endBeat));
     api.applyPlaybackRangeFromHighlight();
     onDone?.();
   };
-  surfaceEl.addEventListener('touchend', end);
+  surfaceEl.addEventListener('touchend', end, { passive: false });
   surfaceEl.addEventListener('touchcancel', end);
   surfaceEl.addEventListener('contextmenu', (e) => { if (selecting || timer) e.preventDefault(); });
 }
+

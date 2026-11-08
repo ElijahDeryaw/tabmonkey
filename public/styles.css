@@ -445,7 +445,7 @@ button, a, input, select, .row, .sec, .chip { touch-action: manipulation; }
 }
 .retune-menu .menu-row > span { white-space: nowrap; }
 .retune-menu .note { max-width: 380px; }
-.retune-menu select { max-width: 200px; }
+.retune-menu select { max-width: 250px; }
 
 /* Middle widths (iPad portrait, small laptops): drop secondary text before anything crowds. */
 @media (max-width: 1100px) and (min-width: 761px) {
@@ -551,4 +551,97 @@ body.stage .session-btn { display: none !important; }
   .ses-person { min-height: 60px; }
   .btn.sm-text { height: 36px; }
   .ses-actions .btn { height: 38px; }
+}
+
+/* ================= iPhone & iPad ================= */
+/* Nothing may be wider than the screen: grid tracks default to their content's width, which pushed the whole page
+   sideways on phones when a bar was full. */
+.screen { grid-template-columns: minmax(0, 1fr); width: 100%; max-width: 100vw; }
+@media (min-width: 761px) { .lib { grid-template-columns: 228px minmax(0, 1fr); } }
+@media (max-width: 760px) { .lib { grid-template-columns: minmax(0, 1fr); } }
+/* Hold-and-drag on the music selects a loop: switch off iOS's own long-press (text selection, loupe, callout),
+   which would otherwise cancel the touch. */
+.viewport, .sheet { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+/* Notch / home indicator in landscape */
+.bar, .transport, .practice { padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
+.toast { bottom: calc(84px + env(safe-area-inset-bottom)); max-width: calc(100vw - 32px); text-align: center; }
+body[data-screen="library"] .toast { bottom: calc(24px + env(safe-area-inset-bottom)); }
+/* iOS zooms the page into any field with text under 16px; keep fields at 16px on touch screens. */
+@media (pointer: coarse) { input:not([type="range"]):not([type="checkbox"]), select, textarea { font-size: 16px; } .mini-select { font-size: 16px; } }
+
+/* Bottom sheets (phones): menus slide up from the bottom, within thumb reach */
+.menu-backdrop { position: fixed; inset: 0; z-index: calc(var(--z-menu) - 1); background: rgb(0 0 0 / 0); transition: background-color .22s; -webkit-tap-highlight-color: transparent; }
+.menu-backdrop.in { background: rgb(0 0 0 / .42); }
+.menu.bottom-sheet { left: 0; right: 0; top: auto; bottom: 0; width: 100%; min-width: 0; max-width: none; max-height: min(84vh, 680px);
+  border-radius: 16px 16px 0 0; border-width: 1px 0 0; padding: 22px max(10px, env(safe-area-inset-left)) calc(12px + env(safe-area-inset-bottom));
+  transform: translateY(100%); transition: transform .26s cubic-bezier(.2, .8, .2, 1); overscroll-behavior: contain; }
+.menu.bottom-sheet.in { transform: none; }
+.menu.bottom-sheet::before { content: ""; position: absolute; top: 8px; left: 50%; width: 36px; height: 5px; margin-left: -18px; border-radius: 3px; background: var(--line-strong); }
+.menu.bottom-sheet .menu-item { min-height: 52px; font-size: 16px; padding: 8px 12px; }
+.menu.bottom-sheet .menu-label { padding: 10px 12px 4px; font-size: 13px; }
+.menu.bottom-sheet .menu-row { padding: 8px 12px; }
+.menu.bottom-sheet .menu-row > span { white-space: normal; }
+.menu.bottom-sheet .note { padding: 10px 12px; font-size: 15px; }
+.menu.bottom-sheet.retune-menu select { max-width: 58vw; }
+.menu.bottom-sheet .fader input { width: 58vw; }
+.menu.bottom-sheet .seg { flex-wrap: wrap; justify-content: flex-end; }
+
+/* iPad portrait and small laptops */
+@media (max-width: 1100px) {
+  .back span { display: none; }
+  .back { padding: 0 6px; }
+  .setnav .meta { white-space: nowrap; }
+}
+
+/* Phones */
+@media (max-width: 600px) {
+  /* Library: logo + session + you on top, a full-width search under it */
+  #library > .bar { flex-wrap: wrap; height: auto; row-gap: 8px; padding-top: calc(8px + env(safe-area-inset-top)); padding-bottom: 10px; }
+  .wordmark { padding-left: 0; }
+  .wordmark .logo { height: 30px; }
+  #library .search { order: 9; flex: 1 0 100%; max-width: none; }
+  .search input { height: 42px; border-radius: 10px; }
+  .search-kbd { display: none; }
+  .who { padding: 0 6px; }
+  .table.songs { --cols: minmax(0, 1fr) 86px 36px; }
+  .table.set { --cols: 20px minmax(0, 1fr) 86px 36px; }
+  .progress, .cell.faint, .cell .faint { white-space: nowrap; font-size: 13px; }
+  .page-head h1 { font-size: 24px; }
+  .page-head .actions .btn { height: 40px; }
+
+  /* Song: two rows. Top: back, title (tap to switch), session, view, more. Bottom: your part and the setlist arrows. */
+  .songbar { flex-wrap: wrap; height: auto; row-gap: 2px; padding-top: calc(4px + env(safe-area-inset-top)); padding-bottom: 6px; }
+  .songbar > .back { order: 1; }
+  .songbar > .song-id { order: 2; flex: 1 1 0; }
+  .songbar > .session-btn { order: 3; }
+  #view-btn { order: 4; }
+  #more-btn { order: 5; }
+  .songbar > .grow { order: 6; flex: 0 0 100%; height: 0; }
+  .songbar > .part { order: 7; flex: 0 1 auto; max-width: none; min-width: 0; }
+  .songbar .part .meta { display: inline; }
+  .songbar > .setnav { order: 8; margin: 0 0 0 auto; padding: 0; border: 0; }
+  .songbar > .setnav .meta { display: inline; min-width: 52px; }
+  #add-song { order: 9; width: var(--h); padding: 0; font-size: 0; gap: 0; }
+  #s-title { font-size: 16px; }
+
+  /* Transport: play, back to start, loop, tempo, and one button for everything else (mix, count-in, click, retune) */
+  .transport { grid-template-columns: auto minmax(0, 1fr) auto; gap: 4px; padding-left: max(6px, env(safe-area-inset-left)); padding-right: max(6px, env(safe-area-inset-right)); }
+  .time { display: none; }
+  #t-retune { display: none; }
+  #t-loop { width: var(--h); padding: 0; font-size: 0; gap: 0; }
+  .stepper { margin: 0; }
+  .stepper .btn.icon { width: 40px; }
+  .tempo { min-width: 60px; }
+
+  .practice { gap: 6px 14px; }
+  .pr-end { margin-left: 0; }
+}
+
+/* Phones on their side: give the music the height */
+@media (max-height: 500px) and (pointer: coarse) {
+  .bar { height: 50px; }
+  .map { height: 40px; }
+  .transport { height: 54px; }
+  .btn.play { width: 44px; height: 44px; }
+  .practice { min-height: 44px; padding-top: 4px; padding-bottom: 4px; }
 }
