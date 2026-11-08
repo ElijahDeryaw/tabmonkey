@@ -1,16 +1,21 @@
 {
   "name": "TabMonkey",
   "short_name": "TabMonkey",
-  "start_url": "/",
+  "start_url": "./",
   "display": "standalone",
   "background_color": "#16161a",
   "theme_color": "#16161a",
   "icons": [
     {
-      "src": "/icon.svg",
+      "src": "apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ]
 }

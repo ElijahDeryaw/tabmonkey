@@ -6,14 +6,28 @@
 <meta name="theme-color" content="#f6f6f4" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#121211" media="(prefers-color-scheme: dark)">
 <title>TabMonkey</title>
-<link rel="manifest" href="/manifest.webmanifest">
-<link rel="icon" href="/icon.svg?v=2" type="image/svg+xml">
-<link rel="apple-touch-icon" href="/icon.svg?v=2">
+<meta name="description" content="Tabs for your band. Open every song on your part, loop the hard bits, and share your setlists with whoever's in the room.">
+<!-- The TabMonkey Worker: Songsterr search/song info and live sessions. -->
+<meta name="tm-api" content="https://tabmonkey.WORKERS_SUBDOMAIN.workers.dev">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="TabMonkey">
+<meta property="og:title" content="TabMonkey">
+<meta property="og:description" content="Tabs for your band. Open every song on your part, loop the hard bits, and share your setlists with whoever's in the room.">
+<meta property="og:image" content="https://elijahderyaw.github.io/tabmonkey/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:url" content="https://elijahderyaw.github.io/tabmonkey/">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="TabMonkey">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg?v=2" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:ital,wght@1,800&text=TabMonkey&display=block">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,200..800;1,200..800&family=Inter:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="styles.css">
 </head>
 <body data-screen="library">
 
@@ -38,6 +52,12 @@
     <symbol id="i-grip" viewBox="0 0 16 16"><g fill="currentColor"><circle cx="6" cy="4" r="1"/><circle cx="10" cy="4" r="1"/><circle cx="6" cy="8" r="1"/><circle cx="10" cy="8" r="1"/><circle cx="6" cy="12" r="1"/><circle cx="10" cy="12" r="1"/></g></symbol>
     <symbol id="i-mix" viewBox="0 0 16 16"><path d="M5 2.75v10.5M11 2.75v10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><rect x="3" y="8.5" width="4" height="2.5" rx=".75" fill="currentColor"/><rect x="9" y="4.5" width="4" height="2.5" rx=".75" fill="currentColor"/></symbol>
     <symbol id="i-type" viewBox="0 0 16 16"><path d="M2.5 12.5 5.75 3.5 9 12.5M3.6 9.6h4.3M10.5 7.75c.4-.6 1-.9 1.75-.9 1.1 0 1.75.6 1.75 1.65v4M14 10.25c-.5-.2-1.1-.3-1.7-.3-1.1 0-1.8.55-1.8 1.35s.6 1.3 1.45 1.3c1 0 1.7-.6 2.05-1.3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-people" viewBox="0 0 16 16"><circle cx="6" cy="5.5" r="2.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M2 13c.4-2.2 2-3.5 4-3.5s3.6 1.3 4 3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M10.5 3.6a2.25 2.25 0 0 1 0 3.8M12 9.9c1 .5 1.8 1.6 2 3.1" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-link" viewBox="0 0 16 16"><path d="M6.75 9.25a2.75 2.75 0 0 0 3.9 0l2.1-2.1a2.75 2.75 0 0 0-3.9-3.9l-.6.6M9.25 6.75a2.75 2.75 0 0 0-3.9 0l-2.1 2.1a2.75 2.75 0 0 0 3.9 3.9l.6-.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-share" viewBox="0 0 16 16"><path d="M8 2.5v7.5M5.25 5.25 8 2.5l2.75 2.75M5 7.25H4.25a1 1 0 0 0-1 1v4.5a1 1 0 0 0 1 1h7.5a1 1 0 0 0 1-1v-4.5a1 1 0 0 0-1-1H11" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-save" viewBox="0 0 16 16"><path d="M8 2.75v7m0 0-3-3m3 3 3-3M3 10.5v1.75c0 .55.45 1 1 1h8c.55 0 1-.45 1-1V10.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-exit" viewBox="0 0 16 16"><path d="M6.5 2.75h-2.5a1.25 1.25 0 0 0-1.25 1.25v8c0 .69.56 1.25 1.25 1.25h2.5M10 5l3 3-3 3M13 8H6.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-sync" viewBox="0 0 16 16"><path d="M13 8a5 5 0 0 1-8.6 3.5M3 8a5 5 0 0 1 8.6-3.5M11.75 2v2.75H9M4.25 14v-2.75H7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   </defs>
 </svg>
 
@@ -64,6 +84,7 @@
       <input id="q" type="search" placeholder="Find a song to add" autocomplete="off" enterkeyhint="search" aria-label="Find a song">
       <kbd class="search-kbd">/</kbd>
     </div>
+    <button class="session-btn" data-session aria-haspopup="dialog"></button>
     <button class="btn ghost who" id="who-btn" aria-haspopup="menu"></button>
   </header>
   <div class="lib">
@@ -71,19 +92,10 @@
       <a class="side-item" href="#" data-nav="songs"><span>Songs</span><span class="count" id="count-songs"></span></a>
       <div class="side-head"><span>Setlists</span><button class="btn icon ghost sm" id="new-set" title="New setlist" aria-label="New setlist"><svg class="i"><use href="#i-plus"/></svg></button></div>
       <div id="side-sets"></div>
+      <div id="side-peers"></div>
     </nav>
     <main class="lib-main" id="lib-main"></main>
   </div>
-  <aside class="share" id="share" hidden aria-label="Open on another device">
-    <div class="share-qr" id="share-qr"></div>
-    <div class="share-text">
-      <span class="share-title">Open on another device</span>
-      <span class="meta">Scan with a phone or tablet camera</span>
-      <span class="share-url" id="share-url"></span>
-      <button class="btn" id="share-copy">Copy link</button>
-    </div>
-    <button class="btn icon ghost sm share-close" id="share-close" aria-label="Hide"><svg class="i"><use href="#i-x"/></svg></button>
-  </aside>
 </div>
 
 <!-- ============ Song ============ -->
@@ -99,6 +111,7 @@
       <button class="btn icon ghost" id="set-next" aria-label="Next song in setlist"><svg class="i"><use href="#i-chev-right"/></svg></button>
     </div>
     <button class="btn" id="add-song" hidden><svg class="i"><use href="#i-plus"/></svg>Add to songs</button>
+    <button class="session-btn compact" data-session aria-haspopup="dialog"></button>
     <button class="btn icon ghost" id="view-btn" title="View" aria-label="View options" aria-haspopup="menu"><svg class="i"><use href="#i-type"/></svg></button>
     <button class="btn icon ghost" id="more-btn" title="More" aria-label="More" aria-haspopup="menu"><svg class="i"><use href="#i-more"/></svg></button>
     <button class="btn icon ghost" id="stage-btn" title="Stage mode (F)" aria-label="Stage mode"><svg class="i"><use href="#i-expand"/></svg></button>
@@ -146,8 +159,10 @@
 </dialog>
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
+<input type="file" id="import-file" accept=".json,application/json" hidden>
 
-<script src="/alphatab/alphaTab.min.js"></script>
-<script type="module" src="/js/main.js"></script>
+<script src="vendor/qrcode.js"></script>
+<script src="alphatab/alphaTab.min.js"></script>
+<script type="module" src="js/main.js"></script>
 </body>
 </html>

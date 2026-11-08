@@ -1,0 +1,62 @@
+<!doctype html>
+<!-- Link-preview cards (1200x630) and the home-screen icon, rendered to PNG by scripts/og/render.js.
+     ?kind=site | session | icon -->
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:ital,wght@1,800&family=Inter:wght@400;500;600;700&display=block">
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1200px; height: 630px; overflow: hidden; }
+  body { background: #121211; color: #ecece8; font-family: Inter, sans-serif; position: relative; }
+  .glow { position: absolute; inset: 0; background:
+      radial-gradient(700px 420px at 88% 110%, rgb(232 89 12 / .28), transparent 70%),
+      radial-gradient(520px 360px at 0% -10%, rgb(61 142 247 / .14), transparent 70%); }
+  /* a stretch of tab running across the card */
+  .tab { position: absolute; left: 0; right: 0; bottom: 64px; height: 150px; opacity: .55; }
+  .tab i { position: absolute; left: 0; right: 0; height: 2px; background: #2c2c29; }
+  .tab b { position: absolute; transform: translate(-50%, -50%); font: 600 22px/1 Inter; color: #6d6d66; padding: 0 5px; text-shadow: 0 0 6px #121211, 0 0 12px #121211; }
+  .tab b.hot { color: #ff6d1f; }
+  .wrap { position: absolute; inset: 0; padding: 72px 80px; display: flex; flex-direction: column; }
+  .logo { height: 92px; width: auto; align-self: flex-start; color: #ecece8; overflow: visible; }
+  h1 { font: 700 76px/1.02 Inter; letter-spacing: -0.035em; margin-top: 44px; }
+  p { font: 400 32px/1.35 Inter; color: #b6b6af; margin-top: 18px; letter-spacing: -0.01em; }
+  .avs { position: absolute; right: 94px; top: 214px; display: flex; }
+  .av { width: 112px; height: 112px; border-radius: 50%; display: grid; place-items: center; font: 600 40px/1 Inter; color: #ecece8;
+    box-shadow: 0 0 0 7px #121211, 0 0 0 14px var(--c); background: color-mix(in srgb, var(--c) 24%, #121211); }
+  .av + .av { margin-left: -14px; }
+  .live { display: inline-flex; align-items: center; gap: 12px; font: 600 26px/1 Inter; color: #2fb36d; margin-top: 30px; }
+  .live::before { content: ""; width: 14px; height: 14px; border-radius: 50%; background: #2fb36d; box-shadow: 0 0 0 8px rgb(47 179 109 / .18); }
+  /* icon */
+  body.icon { width: 180px; height: 180px; background: #ff6d1f; }
+  body.icon .glow, body.icon .tab, body.icon .wrap, body.icon .avs { display: none; }
+  .pick { display: none; }
+  body.icon .pick { display: block; position: absolute; inset: 0; }
+</style></head>
+<body>
+<div class="glow"></div>
+<div class="tab" id="tab"></div>
+<div class="wrap" id="wrap"></div>
+<div class="avs" id="avs" hidden></div>
+<svg class="pick" viewBox="0 0 180 180"><path fill="#121211" transform="translate(90 92) rotate(20) scale(1.75) translate(-32 -32)" d="M32 61c-3 0-8-6-14-16C11 34 6 24 6 17 6 8 15 3 32 3s26 5 26 14c0 7-5 17-12 28-6 10-11 16-14 16Z"/>
+  <text x="90" y="110" text-anchor="middle" font-family="Rubik" font-style="italic" font-weight="800" font-size="62" fill="#ff6d1f">T</text></svg>
+<script>
+  const kind = new URLSearchParams(location.search).get('kind') || 'site';
+  document.body.className = kind;
+  const LOGO = `LOGO_SVG`;
+  // tab: six strings and a few frets
+  const tab = document.getElementById('tab');
+  for (let s = 0; s < 6; s++) tab.insertAdjacentHTML('beforeend', `<i style="top:${s * 30}px"></i>`);
+  const notes = [[60, 5, '0'], [120, 4, '2'], [180, 3, '2'], [240, 2, '1'], [330, 5, '3'], [390, 4, '5'], [450, 3, '5'], [520, 1, '3'],
+    [610, 4, '7', 1], [670, 3, '7', 1], [730, 2, '8', 1], [800, 1, '7', 1], [880, 0, '10', 1], [960, 1, '8'], [1030, 2, '7'], [1100, 3, '9'], [1160, 4, '7']];
+  for (const [x, s, f, hot] of notes) tab.insertAdjacentHTML('beforeend', `<b class="${hot ? 'hot' : ''}" style="left:${x}px;top:${s * 30 + 1}px">${f}</b>`);
+  const wrap = document.getElementById('wrap');
+  if (kind === 'site') {
+    wrap.innerHTML = `${LOGO}<h1>Tabs for your band.</h1><p>Every song opens on your part. Loop the hard bits,<br>then share your setlists with the room.</p>`;
+  } else if (kind === 'session') {
+    wrap.innerHTML = `${LOGO}<h1>You’re invited<br>to a session.</h1><div class="live">Live now · tap to join</div>`;
+    const avs = document.getElementById('avs');
+    avs.hidden = false;
+    avs.innerHTML = ['#f2555a', '#3d8ef7', '#2fb36d', '#f5a524'].map((c) => `<span class="av" style="--c:${c}"><svg width="52" height="52" viewBox="0 0 16 16"><circle cx="8" cy="5.4" r="2.6" fill="#ecece8"/><path d="M2.8 14c.5-3 2.6-4.6 5.2-4.6s4.7 1.6 5.2 4.6Z" fill="#ecece8"/></svg></span>`).join('');
+    document.querySelector('.tab').style.opacity = '.4';
+  }
+</script>
+</body></html>

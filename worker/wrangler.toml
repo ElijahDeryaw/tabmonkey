@@ -1,0 +1,17 @@
+name = "tabmonkey"
+main = "src/index.js"
+compatibility_date = "2025-10-01"
+
+[vars]
+# Where the static app lives (GitHub Pages). Invite links send people here.
+APP_URL = "https://elijahderyaw.github.io/tabmonkey/"
+# Sites allowed to use the API and sessions (localhost is always allowed for development).
+ALLOWED_ORIGINS = "https://elijahderyaw.github.io"
+
+[[durable_objects.bindings]]
+name = "SESSIONS"
+class_name = "Session"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Session"]

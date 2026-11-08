@@ -1,11 +1,13 @@
 {
   "name": "musicvisualize",
   "version": "1.0.0",
-  "description": "Band practice tab viewer for Songsterr tabs",
+  "description": "Tabs for your band: your part, loops, setlists, and live sessions to share them. Static site + a small Cloudflare Worker.",
   "scripts": {
-    "start": "node scripts/start.js",
-    "serve": "node server.js",
-    "soundfont": "node scripts/fetch-soundfont.js"
+    "dev": "node scripts/dev.js",
+    "build": "node scripts/build.js",
+    "soundfont": "node scripts/fetch-soundfont.js",
+    "worker": "npm --prefix worker run dev",
+    "deploy:worker": "npm --prefix worker run deploy"
   },
   "keywords": [],
   "author": "",
@@ -13,7 +15,6 @@
   "type": "module",
   "dependencies": {
     "@coderline/alphatab": "^1.8.4",
-    "express": "^4.21.2",
-    "qrcode": "^1.5.4"
+    "qrcode-generator": "^1.4.4"
   }
 }

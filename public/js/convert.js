@@ -1,5 +1,5 @@
 // Converts Songsterr per-track revision JSON into an alphaTab Score, then to Guitar Pro 7 bytes.
-import * as alphaTab from '@coderline/alphatab';
+/* global alphaTab */ // the UMD build loaded by index.html
 import { isDrumTrack, roleOf, partNames, isLowToHigh } from './tracks.js';
 
 const M = alphaTab.model;

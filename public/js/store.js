@@ -70,3 +70,17 @@ export function recentSongs() {
     .sort((a, b) => b[1].opened - a[1].opened)
     .map(([id, s]) => ({ songId: Number(id), ...s }));
 }
+
+// ---------- backup / restore (players + practice progress on this device)
+export const exportAll = () => JSON.parse(JSON.stringify({ profiles: state.profiles, current: state.current }));
+/** Adds players this device doesn't have; for players it has, adds songs it has no progress for. */
+export function importAll(data) {
+  for (const [name, p] of Object.entries(data?.profiles || {})) {
+    const mine = state.profiles[name];
+    if (!mine) { state.profiles[name] = p; continue; }
+    mine.instrument ??= p.instrument;
+    for (const [id, s] of Object.entries(p.songs || {})) mine.songs[id] ??= s;
+  }
+  if (!state.current && data?.current && state.profiles[data.current]) state.current = data.current;
+  save();
+}

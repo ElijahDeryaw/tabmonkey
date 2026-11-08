@@ -1,6 +1,7 @@
 // Song switcher: tap the song title, see the setlist and your songs right away, type to filter or to find
 // anything on Songsterr. Enter opens the highlighted song.
-import * as bandApi from './bandapi.js';
+import * as bandApi from './lib.js';
+import * as songs from './songs.js';
 import { esc, icon, popover, closePopover } from './ui.js';
 
 export function openSwitcher(anchor, { currentId, setId, onPick }) {
@@ -60,7 +61,7 @@ export function openSwitcher(anchor, { currentId, setId, onPick }) {
     timer = setTimeout(async () => {
       const my = ++seq;
       try {
-        const r = await fetch('/api/search?q=' + encodeURIComponent(query.trim())).then((res) => res.json());
+        const r = await songs.search(query.trim());
         if (my === seq) { remote = r.results || []; draw(); }
       } catch { /* offline: library results still work */ }
     }, 220);

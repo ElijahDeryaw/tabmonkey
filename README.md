@@ -1,30 +1,33 @@
 # TabMonkey
 
-A tab app for a band. It keeps your band's songs and setlists in one place and opens each song on your part. It is built for four situations:
+A tab app for a band. It keeps your songs and setlists in one place and opens each song on your part. It's built for four situations:
 
 - **Practicing alone.** Loop the hard bit, slow it down, and bring the tempo back up as you get it clean.
 - **Playing alone.** Run the song top to bottom against the band, with your part turned down or off.
-- **Band practice.** Jump straight to a section ("from the bridge") and keep a click going.
+- **Band practice.** Start a session, and everyone in the room can open your setlist on their own part.
 - **Playing a set.** Step through a setlist on a full-screen sheet that keeps the screen awake.
 
-Tab data comes from Songsterr's public endpoints (the approach is the same as [songsterr-downloader](https://github.com/Metaphysics0/songsterr-downloader)). The server converts it to Guitar Pro 7, and [alphaTab](https://alphatab.net) renders and plays it in the browser.
+**Open it:** https://elijahderyaw.github.io/tabmonkey/
 
-## Run it
+Tab data comes from Songsterr's public endpoints (the approach is the same as [songsterr-downloader](https://github.com/Metaphysics0/songsterr-downloader)). Each song is converted to Guitar Pro 7 in your browser, and [alphaTab](https://alphatab.net) renders and plays it.
 
-```sh
-npm install
-npm run soundfont   # one-time ~32 MB download of GeneralUser GS (free to use) for playback
-npm start           # the app + a temporary Cloudflare tunnel; prints a public https link
-```
+## Your library lives on your device
 
-`npm start` serves the app on port 3000 and shares it through a Cloudflare quick tunnel. It prints the `https://….trycloudflare.com` link with a QR code you can scan from the terminal. The same QR code sits in the bottom-right of the library screen, so you can hop between devices or hand it to a bandmate. HTTPS also lets stage mode keep the screen awake. The link changes each time you start. Ctrl+C stops both.
+Songs, setlists, players and practice progress are kept in your browser. Nothing is stored on a server. Use **Back up library and progress** in the player menu (top right) to save a file, and **Restore from a backup** to load it on another device. Restore also accepts the old server's `data/band.json`.
 
-- **cloudflared** is found on PATH, or inside WSL on Windows. If it isn't installed, the app still runs on your network only.
-- **Your own Cloudflare setup** (`~/.cloudflared/config.yml`) is left alone: the quick tunnel runs with an empty config.
-- **Anyone with the link** can edit the band's songs and setlists. Share it with your band only, or put a named tunnel behind Cloudflare Access.
-- **`npm run serve`** (or `TUNNEL=0 npm start`) runs the app without the tunnel. `PORT` and `HOST` are respected.
+## Sessions
 
-`deploy/musicvisualize.service` is a systemd unit if the host runs Linux.
+Sessions let the room share without anyone setting anything up.
+
+1. Tap **Session**, then **Start a session**. You get a QR code and a link (**Share link** opens the share sheet on iPhone and iPad).
+2. Anyone who opens the link joins. The first time, they pick their name and instrument, and then they're in.
+3. While the session is open, everyone sees everyone else's songs and setlists in the sidebar, under that person's colour. They can open any song on their own part, **Play set** through someone's setlist, and **Save to my library** to keep a copy. If the setlist changes later, the button becomes **Update my copy**.
+4. The coloured avatars in the top bar show who's here. The session panel shows what each person has open, with a button to open the same song.
+5. The host ends it for everyone. Guests can leave on their own. Nothing is kept: a guest's library disappears from the session when they leave, and a session nobody is in is deleted after a day.
+
+Shared links show a "You're invited to a session" card in iMessage, WhatsApp, Slack and the like, with the host's name and how many songs and setlists they're sharing. A plain link to the site shows the regular TabMonkey card.
+
+Anyone with a session link can see what's shared in it, so send it to your band only.
 
 ## How it works
 
@@ -47,7 +50,7 @@ npm start           # the app + a temporary Cloudflare tunnel; prints a public h
   - Notes below your lowest string go up an octave as a last resort. The menu tells you when retuning would let you play it as written.
 - **Stage mode** (`F`). Goes full screen and keeps only the sheet, the song map, play, and setlist navigation. Page-turner pedals that send PageDown/PageUp scroll the sheet.
 
-The band library and setlists are stored on the server in `data/band.json`. Practice progress and preferences live in each browser, separately for each player.
+- **Back up** (player menu). Saves your library and every player's practice progress on this device to a file.
 
 ## Keys
 
@@ -67,14 +70,32 @@ The band library and setlists are stored on the server in `data/band.json`. Prac
 | / | Search |
 | Esc | Close menu, leave stage mode, stop looping |
 
-## Data endpoints
+## How it's built
 
-| Endpoint | What |
-|---|---|
-| `GET /api/search?q=` | Songsterr search (falls back to downloaded songs when offline) |
-| `GET /api/song/:id` | Song info: parts, tuning, capo |
-| `GET /api/song/:id/score.gp` | Converted Guitar Pro 7 file (`?download=1` to save) |
-| `GET /api/song/:id/raw.json` | Raw Songsterr metadata + per-track JSON |
-| `GET /api/band` | The band's songs and setlists |
+- **`public/`** is the app. It's a static site: no build tools, just ES modules. `npm run build` copies it to `dist/` together with alphaTab, the QR code library and the soundfont, and stamps every module URL with a content hash.
+- **GitHub Pages** serves `dist/`. `.github/workflows/pages.yml` builds and deploys on every push to `main`, and downloads GeneralUser GS (free to use and redistribute) for playback.
+- **`worker/`** is a Cloudflare Worker (free plan) for the things a static page can't do:
+  - `GET /api/songs?pattern=` and `GET /api/meta/:id` pass through to Songsterr, which sends no CORS headers. Responses are cached at the edge.
+  - `GET /session/:id` is the live session relay, one Durable Object per session, over a WebSocket.
+  - `GET /s/:id` is the invite link: a page with the preview card that sends people on to the app.
+- The per-track tab JSON comes straight from Songsterr's CDN, which allows cross-origin requests, and is cached in the browser.
+
+### Develop
+
+```sh
+npm install
+npm run soundfont     # optional: GeneralUser GS (~32 MB); without it, alphaTab's small font is used
+npm run dev           # http://localhost:5050, rebuilds when public/ changes
+npm run worker        # optional: the Worker on http://localhost:8787 (open the app with ?api=http://localhost:8787)
+node scripts/og/render.js   # re-render the link preview images and home screen icon
+```
+
+### Deploy
+
+```sh
+cd worker && npx wrangler login && npx wrangler deploy   # prints https://tabmonkey.<you>.workers.dev
+```
+
+Put that URL in `<meta name="tm-api">` in `public/index.html`, and push to `main`. If the site moves, update `APP_URL` and `ALLOWED_ORIGINS` in `worker/wrangler.toml`.
 
 Songsterr's terms of use apply to the tab data.

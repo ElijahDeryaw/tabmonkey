@@ -1,6 +1,9 @@
 // App shell: routing, who's playing, and the song screen (sheet, song map, transport, practice).
 import * as store from './store.js';
-import * as bandApi from './bandapi.js';
+import * as bandApi from './lib.js';
+import * as songs from './songs.js';
+import * as session from './session.js';
+import * as sessionUi from './sessionui.js';
 import * as player from './player.js';
 import * as practice from './practice.js';
 import * as library from './library.js';
@@ -31,6 +34,7 @@ function route() {
   const h = new URLSearchParams(location.hash.slice(1));
   const opts = pendingOpts; pendingOpts = {};
   closePopover();
+  if (h.get('join')) { joinSession(h.get('join')); return; }
   if (h.get('song')) {
     document.body.dataset.screen = 'song';
     openSong(Number(h.get('song')), h.get('set'));
@@ -38,9 +42,24 @@ function route() {
     leaveSong();
     document.body.dataset.screen = 'library';
     document.title = 'TabMonkey';
-    library.render(h.get('set') ? { kind: 'set', id: h.get('set') } : { kind: 'songs' }, opts);
+    session.setStatus(null);
+    library.render(h.get('set') ? { kind: 'set', id: h.get('set') } : h.get('peer') ? { kind: 'peer', peer: h.get('peer') } : { kind: 'songs' }, opts);
   }
 }
+
+// Opening an invite link (…#join=<id>): join, then land on the host's library once it arrives.
+async function joinSession(id) {
+  history.replaceState(null, '', location.pathname + location.search);
+  route();
+  if (!store.profile()) { pendingJoin = id; return; } // after "Who's playing?"
+  toast('Joining the session…');
+  const host = await session.join(id);
+  const p = host && session.peer(host);
+  if (!p) return; // ended / unreachable: sessionui says so
+  toast(`You’re in ${/s$/i.test(p.name) ? `${p.name}’` : `${p.name}’s`} session`);
+  if (document.body.dataset.screen === 'library' && !location.hash.slice(1)) navigate(`peer=${host}`);
+}
+let pendingJoin = null;
 
 function leaveSong() {
   if (api && app.playing) api.pause();
@@ -75,6 +94,8 @@ function whoDialog({ name = '', instrument = 'guitar', required = false } = {}) 
 
 function afterWho() {
   drawWho();
+  session.profileChanged();
+  if (pendingJoin) { const id = pendingJoin; pendingJoin = null; setTimeout(() => joinSession(id)); }
   if (app.info) { const id = app.songId; app.songId = null; openSong(id, app.setId, { fresh: true }); }
   else route();
 }
@@ -86,15 +107,41 @@ $('who-btn').onclick = () => {
     ${store.profileNames().map((n) => `<button class="menu-item" data-p="${esc(n)}"><span class="check">${n === p?.name ? icon('check') : ''}</span><span class="grow">${esc(n)}</span><span class="meta">${INSTRUMENTS.find((i) => i.id === store.profileInstrument(n))?.label ?? ''}</span></button>`).join('')}
     <div class="menu-sep"></div>
     <button class="menu-item" data-act="edit"><span class="check"></span>Edit ${esc(p?.name ?? 'player')}…</button>
-    <button class="menu-item" data-act="new"><span class="check">${icon('plus')}</span>New player…</button>`, {
+    <button class="menu-item" data-act="new"><span class="check">${icon('plus')}</span>New player…</button>
+    <div class="menu-sep"></div>
+    <div class="menu-label">Everything is kept in this browser</div>
+    <button class="menu-item" data-act="backup"><span class="check">${icon('save')}</span>Back up library and progress</button>
+    <button class="menu-item" data-act="restore"><span class="check"></span>Restore from a backup…</button>`, {
     align: 'end',
     onClick: (e, m) => {
       const pick = e.target.closest('[data-p]');
       if (pick) { m.close(); store.setProfile(pick.dataset.p); afterWho(); return; }
       const act = e.target.closest('[data-act]')?.dataset.act;
+      if (act === 'backup') { m.close(); backup(); return; }
+      if (act === 'restore') { m.close(); $('import-file').click(); return; }
       if (act) { m.close(); whoDialog(act === 'edit' ? { name: p?.name, instrument: p?.instrument } : {}); }
     },
   });
+};
+
+// ---------- backup / restore: one JSON file with your library and every player's progress on this device
+function backup() {
+  const data = { app: 'tabmonkey', version: 1, savedAt: new Date().toISOString(), library: bandApi.exportData(), players: store.exportAll() };
+  songs.download(`TabMonkey backup ${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(data, null, 1), 'application/json');
+}
+$('import-file').onchange = async (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  try {
+    const data = JSON.parse(await file.text());
+    // Accepts a TabMonkey backup or the old server's data/band.json ({ songs, setlists }).
+    const r = bandApi.importData(data.library ?? data);
+    if (data.players) store.importAll(data.players);
+    drawWho();
+    toast(`Restored ${r.songs} song${r.songs === 1 ? '' : 's'} and ${r.setlists} setlist${r.setlists === 1 ? '' : 's'}`);
+    route();
+  } catch (err) { toast('That file isn’t a TabMonkey backup'); console.error(err); }
 };
 
 // ================= song screen =================
@@ -107,16 +154,16 @@ async function openSong(id, setId, { fresh = false } = {}) {
   // Drop the previous song's loop range, or alphaTab tries to draw it on the new song before it's laid out.
   if (api) { api.isLooping = false; api.playbackRange = null; api.clearPlaybackRangeHighlight(); }
   loading('Loading');
-  let info;
+  let info, gp;
   try {
-    const res = await fetch('/api/song/' + id);
-    info = await res.json();
-    if (!res.ok) throw new Error(info.error);
+    ({ info, gp } = await songs.build(id));
   } catch (e) {
     loading(null);
     toast('Could not load that song: ' + e.message);
+    console.error(e);
     return;
   }
+  if (Number(new URLSearchParams(location.hash.slice(1)).get('song')) !== id) return; // moved on while it loaded
   const s = store.song(id);
   app.info = info; app.songId = id; app.resumed = false;
   app.ready = { render: false, midi: false };
@@ -124,6 +171,7 @@ async function openSong(id, setId, { fresh = false } = {}) {
   app.selected = new Set([pickTrack(info, store.profile()?.instrument, s.track)]);
   rememberPart();
   store.updateSong(id, { title: info.title, artist: info.artist, opened: Date.now(), sectionCount: info.sections || undefined });
+  session.setStatus(info);
 
   document.title = `${info.title} · ${info.artist}`;
   $('s-title').textContent = info.title;
@@ -133,17 +181,17 @@ async function openSong(id, setId, { fresh = false } = {}) {
   if (info.missing.length) toast(`${info.missing.length} part(s) couldn't be downloaded`);
 
   if (!api) createApi();
-  api.load(`/api/song/${id}/score.gp`);
-  watchLoad(id);
+  api.load(gp.slice()); // alphaTab may transfer the buffer to its worker; keep ours for retries and downloads
+  watchLoad(id, false, gp);
 }
 
 // Never leave the loading overlay up forever: retry the load once, then give up with a message.
 let loadWatch = null;
-function watchLoad(id, retried = false) {
+function watchLoad(id, retried, gp) {
   clearTimeout(loadWatch);
   loadWatch = setTimeout(() => {
     if (app.songId !== id || $('loading').hidden) return;
-    if (!retried) { console.warn('Score load stalled, retrying'); api.load(`/api/song/${id}/score.gp`); watchLoad(id, true); return; }
+    if (!retried) { console.warn('Score load stalled, retrying'); api.load(gp.slice()); watchLoad(id, true, gp); return; }
     loading(null);
     toast('This song is taking too long to draw. Try reloading the page.');
   }, 15000);
@@ -709,9 +757,18 @@ $('more-btn').onclick = () => {
   $('more-btn')._song = { songId: app.songId, title: app.info.title, artist: app.info.artist };
   library.songMenu($('more-btn'), app.songId, `
     <div class="menu-sep"></div>
-    <a class="menu-item" href="/api/song/${app.songId}/score.gp?download=1" download><span class="check"></span>Download Guitar Pro file</a>
-    <a class="menu-item" href="/api/song/${app.songId}/raw.json" download><span class="check"></span>Download raw JSON</a>`);
+    <button class="menu-item" data-download="gp"><span class="check"></span>Download Guitar Pro file</button>
+    <button class="menu-item" data-download="raw"><span class="check"></span>Download raw JSON</button>`);
 };
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-download]');
+  if (!b || !app.songId) return;
+  closePopover();
+  const { info, gp, meta, parts } = await songs.build(app.songId);
+  const base = `${info.artist} - ${info.title}`;
+  if (b.dataset.download === 'gp') songs.download(`${base}.gp`, gp);
+  else songs.download(`${info.songId}-raw.json`, JSON.stringify({ meta, parts }), 'application/json');
+});
 // The library's song menu reads anchor._song for songs that aren't in the library yet.
 bandApi.onChange(() => { if (app.info) { drawHeader(); drawSetNav(); } });
 
@@ -830,7 +887,8 @@ await loadThemeFonts(themeName());
 applySheet();
 drawWho();
 library.init({ navigate });
-try { await bandApi.refresh(); } catch (e) { toast('Could not load the band library'); }
+sessionUi.init({ navigate });
+session.boot();
 addEventListener('hashchange', route);
 route();
 if (!store.profile()) whoDialog({ required: true });

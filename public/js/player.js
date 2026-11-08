@@ -5,11 +5,13 @@ export let api = null;
 let barStarts = []; // midi start tick per master bar (filled once the midi is generated)
 let barEnds = [];
 
+// Built into the site by scripts/build.js (GeneralUser GS when present, else alphaTab's own sonivox).
+const SOUNDFONT = document.querySelector('meta[name="tm-soundfont"]')?.content || 'soundfont/sonivox.sf2';
 const VIEW = { tab: 'TabMixed', both: 'Default', notation: 'Score' };
 
 export function create(el, scrollEl, { scale, layout, view }) {
   api = new alphaTab.AlphaTabApi(el, {
-    core: { fontDirectory: '/alphatab/font/', includeNoteBounds: false },
+    core: { fontDirectory: new URL('alphatab/font/', document.baseURI).href, includeNoteBounds: false },
     display: {
       scale, layoutMode: alphaTab.LayoutMode[layout], staveProfile: alphaTab.StaveProfile[VIEW[view]],
       systemPaddingTop: 25, systemPaddingBottom: 15,
@@ -23,7 +25,7 @@ export function create(el, scrollEl, { scale, layout, view }) {
     },
     player: {
       playerMode: alphaTab.PlayerMode.EnabledSynthesizer,
-      soundFont: '/api/soundfont',
+      soundFont: new URL(SOUNDFONT, document.baseURI).href,
       scrollElement: scrollEl,
       scrollOffsetY: -60,
       enableCursor: true,

@@ -1,22 +1,27 @@
-// Library: the band's songs and setlists, plus search to add new songs.
+// Library: your songs and setlists, the libraries of people in your session, and search to add new songs.
 import * as store from './store.js';
-import * as bandApi from './bandapi.js';
+import * as bandApi from './lib.js';
+import * as songs from './songs.js';
+import * as session from './session.js';
+import { avatar } from './sessionui.js';
 import { $, esc, icon, ago, toast, popover, closePopover } from './ui.js';
 
-let view = { kind: 'songs' }; // or { kind: 'set', id }
+let view = { kind: 'songs' }; // or { kind: 'set', id } or { kind: 'peer', peer }
+const possessive = (n) => (/s$/i.test(n) ? `${n}’` : `${n}’s`);
 let sort = { key: 'recent', dir: 1 };
 let go = () => {};
 
 export function init({ navigate }) {
   go = navigate;
-  bandApi.onChange(() => { if (document.body.dataset.screen === 'library') render(view); });
+  const rerender = () => { if (document.body.dataset.screen === 'library' && !document.querySelector('#set-name')) render(view); };
+  bandApi.onChange(rerender);
+  session.onChange(rerender);
   initSearch();
   $('new-set').onclick = async () => {
     const id = await bandApi.createSetlist('Untitled setlist');
     go(`set=${id}`, { rename: true });
   };
   $('lib-main').addEventListener('click', onMainClick);
-  initShare();
   $('lib-main').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('.row[data-href]')) go(e.target.dataset.href); });
 }
 
@@ -27,14 +32,93 @@ export function render(v = view, { rename = false } = {}) {
   $('count-songs').textContent = b.songs.length || '';
   $('side-sets').innerHTML = b.setlists.map((l) =>
     `<a class="side-item" href="#set=${l.id}" ${view.kind === 'set' && view.id === l.id ? 'aria-current="true"' : ''}><span>${esc(l.name)}</span><span class="count">${l.songIds.length || ''}</span></a>`).join('');
+  drawPeerNav();
   document.querySelector('[data-nav="songs"]').toggleAttribute('aria-current', view.kind === 'songs');
   if (view.kind === 'songs') document.querySelector('[data-nav="songs"]').setAttribute('aria-current', 'true');
 
   if (view.kind === 'set') {
     const l = bandApi.setlist(view.id);
-    if (!l) { view = { kind: 'songs' }; return render(view); }
+    if (!l) { view = { kind: 'songs' }; clearHash(); return render(view); }
     renderSet(l, rename);
+  } else if (view.kind === 'peer') {
+    const p = session.peer(view.peer), lib = session.library(view.peer);
+    if (!p || !lib) { view = { kind: 'songs' }; clearHash(); return render(view); }
+    renderPeer(p, lib);
   } else renderSongs(b.songs);
+}
+
+/** A setlist or library that went away (deleted, or its owner left the session): drop it from the address bar. */
+const clearHash = () => { if (location.hash) history.replaceState(null, '', location.pathname + location.search); };
+
+/** Sidebar: one group per person in the session who's sharing something, in their session color. */
+function drawPeerNav() {
+  $('side-peers').innerHTML = session.sharing().map((p) => {
+    const lib = session.library(p.peer);
+    const cur = (v) => (v ? 'aria-current="true"' : '');
+    return `<div class="side-peer" style="--c:${esc(p.color)}">
+      <div class="side-head peer">${avatar(p, 'sm')}<span>${esc(possessive(p.name))} library</span></div>
+      <a class="side-item" href="#peer=${esc(p.peer)}" ${cur(view.kind === 'peer' && view.peer === p.peer)}><span>Songs</span><span class="count">${lib.songs.length || ''}</span></a>
+      ${lib.setlists.map((l) => {
+        const id = `${p.peer}~${l.id}`;
+        const saved = bandApi.copyIsCurrent(bandApi.setlist(id));
+        return `<a class="side-item" href="#set=${esc(id)}" ${cur(view.kind === 'set' && view.id === id)}><span>${esc(l.name)}</span><span class="count">${saved ? icon('check', 'saved') : l.songIds.length || ''}</span></a>`;
+      }).join('')}
+    </div>`;
+  }).join('');
+}
+
+/** Someone else's songs: open any of them, add the ones you want. */
+function renderPeer(p, lib) {
+  const rows = lib.songs.map(songRowData).sort((a, b) => a.title.localeCompare(b.title));
+  const missing = rows.filter((r) => !bandApi.hasSong(r.songId)).length;
+  $('lib-main').innerHTML = `<div class="page">
+    <div class="page-head">
+      <div class="title">${avatar(p, 'head')}<h1>${esc(possessive(p.name))} songs</h1><span class="meta">${rows.length} song${rows.length === 1 ? '' : 's'}</span></div>
+      <div class="actions">${rows.length ? (missing
+        ? `<button class="btn primary" data-save-all>${icon('save')}Add ${missing === rows.length ? 'all' : `${missing} new`} to my songs</button>`
+        : `<span class="saved-note">${icon('check')}All in your songs</span>`) : ''}</div>
+    </div>
+    ${rows.length ? `<div class="table peer" role="table">
+      <div class="row head" role="row"><span>Song · Artist</span><span class="hide-sm">Your part</span><span>Progress</span><span></span></div>
+      ${rows.map((r) => `<div class="row" role="row" tabindex="0" data-href="song=${r.songId}">
+        <span class="cell"><span class="t">${esc(r.title)}</span><span class="s">${esc(r.artist)}</span></span>
+        <span class="cell hide-sm">${partCell(r)}</span>
+        <span class="cell">${progressCell(r)}</span>
+        <span class="cell end">${bandApi.hasSong(r.songId)
+          ? `<span class="added" title="In your songs">${icon('check')}<span class="hide-sm">Yours</span></span>`
+          : `<button class="btn quiet" data-add-song="${r.songId}" aria-label="Add ${esc(r.title)} to your songs">${icon('plus')}<span class="hide-sm">Add</span></button>`}</span>
+      </div>`).join('')}
+    </div>` : `<div class="empty"><h2>No songs yet</h2><p>${esc(p.name)} hasn’t added any songs. They’ll appear here the moment they do.</p></div>`}
+  </div>`;
+}
+
+/** Someone else's setlist: read-only, with one button to keep a copy. */
+function renderRemoteSet(l) {
+  const p = session.peer(l.peer);
+  const rows = l.songIds.map((id) => bandApi.songMeta(id)).filter(Boolean).map(songRowData);
+  const copy = bandApi.savedCopy(l), current = bandApi.copyIsCurrent(l);
+  const save = !copy ? `<button class="btn primary" data-save-set>${icon('save')}Save to my library</button>`
+    : current ? `<a class="btn ghost saved-link" href="#set=${copy.id}" title="Open your copy">${icon('check')}Saved</a>`
+    : `<button class="btn primary" data-save-set title="Your copy differs from ${esc(p?.name ?? 'theirs')}">${icon('sync')}Update my copy</button>`;
+  $('lib-main').innerHTML = `<div class="page">
+    <div class="page-head">
+      <div class="title">${avatar(p, 'head')}<h1>${esc(l.name)}</h1><span class="meta">${p ? `From ${esc(p.name)} · ` : ''}${rows.length} song${rows.length === 1 ? '' : 's'}</span></div>
+      <div class="actions">
+        <button class="btn" data-play-set ${rows.length ? '' : 'disabled'}>${icon('play')}Play set</button>
+        ${rows.length ? save : ''}
+      </div>
+    </div>
+    ${rows.length ? `<div class="table set remote" role="table">
+      <div class="row head" role="row"><span class="hide-sm"></span><span>Song</span><span class="hide-sm">Your part</span><span>Progress</span><span></span></div>
+      ${rows.map((r, i) => `<div class="row" role="row" tabindex="0" data-href="song=${r.songId}&set=${esc(l.id)}">
+        <span class="cell idx hide-sm">${i + 1}</span>
+        <span class="cell"><span class="t">${esc(r.title)}</span><span class="s">${esc(r.artist)}</span></span>
+        <span class="cell hide-sm">${partCell(r)}</span>
+        <span class="cell">${progressCell(r)}</span>
+        <span class="cell end">${bandApi.hasSong(r.songId) ? `<span class="added" title="In your songs">${icon('check')}</span>` : ''}</span>
+      </div>`).join('')}
+    </div>` : `<div class="empty"><h2>Empty setlist</h2><p>${esc(p?.name ?? 'They')} hasn’t put any songs in it yet.</p></div>`}
+  </div>`;
 }
 
 function songRowData(s) {
@@ -74,6 +158,7 @@ function renderSongs(songs) {
 }
 
 function renderSet(l, rename) {
+  if (l.remote) return renderRemoteSet(l);
   const rows = l.songIds.map((id) => bandApi.songMeta(id)).filter(Boolean).map(songRowData);
   $('lib-main').innerHTML = `<div class="page">
     <div class="page-head">
@@ -107,31 +192,6 @@ function renderSet(l, rename) {
   enableReorder(l);
 }
 
-// ---------- share: QR code + link for opening the app on another device
-async function initShare() {
-  let info;
-  try { info = await fetch('/api/share').then((r) => r.json()); } catch { return; }
-  $('share-qr').innerHTML = info.svg;
-  $('share-url').textContent = info.url.replace(/^https?:\/\//, '');
-  $('share-url').title = info.url;
-  const mini = document.createElement('button');
-  mini.className = 'btn share-mini';
-  mini.innerHTML = `${icon('expand')}Share`;
-  mini.title = 'Show the QR code for opening this on another device';
-  document.getElementById('library').append(mini);
-  const show = (on) => {
-    $('share').hidden = !on; mini.hidden = on;
-    store.setDevice('shareHidden', !on);
-  };
-  show(!store.device('shareHidden', false));
-  $('share-close').onclick = () => show(false);
-  mini.onclick = () => show(true);
-  $('share-copy').onclick = async () => {
-    try { await navigator.clipboard.writeText(info.url); toast('Link copied'); }
-    catch { toast(info.url); }
-  };
-}
-
 // ---------- actions
 async function onMainClick(e) {
   const t = e.target;
@@ -146,6 +206,25 @@ async function onMainClick(e) {
 
   const menuBtn = t.closest('[data-song-menu]');
   if (menuBtn) { e.preventDefault(); return songMenu(menuBtn, Number(menuBtn.dataset.songMenu)); }
+
+  if (t.closest('[data-save-set]')) {
+    const l = bandApi.setlist(view.id);
+    const had = !!bandApi.savedCopy(l);
+    const r = bandApi.saveSetlist(l);
+    toast(had ? `Updated your copy of ${l.name}` : `Saved ${l.name}${r.added ? ` · ${r.added} new song${r.added === 1 ? '' : 's'}` : ''}`);
+    return;
+  }
+  if (t.closest('[data-save-all]')) {
+    const n = bandApi.saveSongs(session.library(view.peer)?.songs || []);
+    toast(`Added ${n} song${n === 1 ? '' : 's'} to your library`);
+    return;
+  }
+  const addSong = t.closest('[data-add-song]');
+  if (addSong) {
+    const s = bandApi.songMeta(Number(addSong.dataset.addSong));
+    if (s) { bandApi.addSong(s); toast(`Added ${s.title}`); }
+    return;
+  }
 
   const rm = t.closest('[data-remove]');
   if (rm) {
@@ -182,7 +261,7 @@ async function onMainClick(e) {
 
 /** Per-song menu, used in the library and the song screen. */
 export function songMenu(anchor, songId, extra = '') {
-  const meta = bandApi.songMeta(songId);
+  const meta = bandApi.hasSong(songId) ? bandApi.songMeta(songId) : null;
   popover(anchor, () => {
     const sets = bandApi.band().setlists;
     return `
@@ -194,7 +273,7 @@ export function songMenu(anchor, songId, extra = '') {
   }, {
     align: 'end',
     onClick: async (e, m) => {
-      const song = meta || anchor._song;
+      const song = meta || anchor._song || bandApi.songMeta(songId);
       const set = e.target.closest('[data-set]');
       if (set) { await bandApi.toggleInSetlist(set.dataset.set, song); m.redraw(); return; }
       if (e.target.closest('[data-new-set]')) {
@@ -340,19 +419,19 @@ async function search() {
   if (!q) { results = []; closePopover(); return; }
   const my = ++seq;
   try {
-    const r = await fetch('/api/search?q=' + encodeURIComponent(q)).then((r) => r.json());
+    const r = await songs.search(q, bandApi.band().songs);
     if (my !== seq) return;
     results = r.results || [];
-    results.offline = r.source === 'cache';
+    results.offline = r.source === 'offline';
     active = -1;
     showResults();
   } catch (e) { results = []; toast('Search failed: ' + e.message); }
 }
 
 function showResults() {
-  const set = view.kind === 'set' ? bandApi.setlist(view.id) : null;
+  const set = view.kind === 'set' && !bandApi.isRemoteId(view.id) ? bandApi.setlist(view.id) : null;
   const render = () => `
-    ${results.offline ? '<div class="note">Songsterr is unreachable. Showing songs already downloaded.</div>' : ''}
+    ${results.offline ? '<div class="note">Can’t reach Songsterr right now. Showing matches from your library.</div>' : ''}
     ${results.length ? '' : '<div class="note">No songs found.</div>'}
     ${results.map((s, i) => {
       const inSet = set?.songIds.includes(s.songId), inLib = bandApi.hasSong(s.songId);
