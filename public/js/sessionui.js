@@ -5,6 +5,7 @@ import * as session from './session.js';
 import * as store from './store.js';
 import { INSTRUMENTS } from './instruments.js';
 import { esc, icon, toast, popover, closePopover } from './ui.js';
+import * as native from './native.js';
 
 let go = () => {};
 const instLabel = (id) => INSTRUMENTS.find((i) => i.id === id)?.label ?? '';
@@ -70,31 +71,40 @@ function draw() {
   seen = new Set(people.map((p) => p.peer));
 }
 
-// ---------- the panel
+// ---------- the panel (a popover, or on phones the Session tab's page)
 let current = null;
+/** Buttons in the panel; close() dismisses the popover (a no-op on the page), redraw() refreshes it. */
+function act(e, close, redraw) {
+  const a = e.target.closest('[data-act]')?.dataset.act;
+  const open = e.target.closest('[data-open-song]');
+  if (open) { close(); go(`song=${open.dataset.openSong}`); return; }
+  const lib = e.target.closest('[data-open-peer]');
+  if (lib) { close(); go(`peer=${lib.dataset.openPeer}`); return; }
+  if (a) native.haptic();
+  if (a === 'start') { if (!store.profile()) { toast('Pick your name first'); return; } session.start(); redraw(); }
+  if (a === 'copy') copyLink(e.target.closest('button'));
+  if (a === 'share') shareLink();
+  if (a === 'leave') { close(); session.leave(); toast('You left the session'); }
+  if (a === 'end') { close(); session.end(); toast('Session ended. Your library stays on your device.'); }
+}
 function openPanel(anchor) {
   current = popover(anchor, () => (session.active() ? livePanel() : startPanel()), {
     align: 'end',
     className: 'session-menu',
-    onClick: async (e, m) => {
-      if (e.type !== 'click') return;
-      const act = e.target.closest('[data-act]')?.dataset.act;
-      const open = e.target.closest('[data-open-song]');
-      if (open) { m.close(); go(`song=${open.dataset.openSong}`); return; }
-      const lib = e.target.closest('[data-open-peer]');
-      if (lib) { m.close(); go(`peer=${lib.dataset.openPeer}`); return; }
-      if (act === 'start') { if (!store.profile()) { toast('Pick your name first'); return; } session.start(); m.redraw(); }
-      if (act === 'copy') copyLink(e.target.closest('button'));
-      if (act === 'share') shareLink();
-      if (act === 'leave') { m.close(); session.leave(); toast('You left the session'); }
-      if (act === 'end') { m.close(); session.end(); toast('Session ended. Your library stays on your device.'); }
-    },
+    onClick: (e, m) => { if (e.type === 'click') act(e, m.close, m.redraw); },
   });
   if (!current) return;
   // popover() returns { el, anchor, draw }; keep a redraw that also re-places it
   const c = current;
   current = { redraw: () => { if (document.body.contains(c.el)) c.draw(); else current = null; } };
 }
+
+/** The Session tab (phones): the same panel as a page. */
+export const pageHtml = () => `<div class="ses-page">${session.active() ? livePanel() : startPanel()}</div>`;
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.ses-page')) return;
+  act(e, () => {}, () => { const el = document.querySelector('.ses-page'); if (el) el.outerHTML = pageHtml(); });
+});
 
 function startPanel() {
   return `<div class="ses-start">

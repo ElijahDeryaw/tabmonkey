@@ -5,14 +5,19 @@ import * as songs from './songs.js';
 import * as session from './session.js';
 import { avatar } from './sessionui.js';
 import { $, esc, icon, ago, toast, popover, closePopover } from './ui.js';
+import * as native from './native.js';
 
-let view = { kind: 'songs' }; // or { kind: 'set', id } or { kind: 'peer', peer }
+// { kind: 'songs' | 'sets' | 'session' | 'me' } (the tabs; on desktop the sidebar covers songs and sets),
+// { kind: 'set', id } or { kind: 'peer', peer }
+let view = { kind: 'songs' };
+let pages = {};
 const possessive = (n) => (/s$/i.test(n) ? `${n}’` : `${n}’s`);
 let sort = { key: 'recent', dir: 1 };
 let go = () => {};
 
-export function init({ navigate }) {
+export function init({ navigate, sessionPage, mePage }) {
   go = navigate;
+  pages = { session: sessionPage, me: mePage };
   const rerender = () => { if (document.body.dataset.screen === 'library' && !document.querySelector('#set-name')) render(view); };
   bandApi.onChange(rerender);
   session.onChange(rerender);
@@ -23,7 +28,19 @@ export function init({ navigate }) {
   };
   $('lib-main').addEventListener('click', onMainClick);
   $('lib-main').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('.row[data-href]')) go(e.target.dataset.href); });
+  // Touch: long-press a song for its menu, like any iOS list.
+  native.onLongPress($('lib-main'), '.row[data-href]', (row) => {
+    const m = row.dataset.href.match(/^song=(\d+)/);
+    if (!m) return;
+    const id = Number(m[1]);
+    row._song = bandApi.songMeta(id);
+    songMenu(row, id);
+  });
+  $('tabbar').addEventListener('click', (e) => { if (e.target.closest('[data-tab]')) native.haptic(); });
 }
+
+/** Which tab a view belongs to (for the iPhone tab bar). */
+const tabOf = (v) => (v.kind === 'set' || v.kind === 'peer' ? 'sets' : v.kind);
 
 // ---------- rendering
 export function render(v = view, { rename = false } = {}) {
@@ -36,7 +53,13 @@ export function render(v = view, { rename = false } = {}) {
   document.querySelector('[data-nav="songs"]').toggleAttribute('aria-current', view.kind === 'songs');
   if (view.kind === 'songs') document.querySelector('[data-nav="songs"]').setAttribute('aria-current', 'true');
 
-  if (view.kind === 'set') {
+  document.body.dataset.tab = tabOf(view);
+  for (const a of $('tabbar').querySelectorAll('[data-tab]')) a.toggleAttribute('aria-current', a.dataset.tab === tabOf(view));
+  drawSessionTab();
+
+  if (view.kind === 'sets') renderSets();
+  else if (view.kind === 'session' || view.kind === 'me') $('lib-main').innerHTML = `<div class="page tab-page">${pages[view.kind]?.() ?? ''}</div>`;
+  else if (view.kind === 'set') {
     const l = bandApi.setlist(view.id);
     if (!l) { view = { kind: 'songs' }; clearHash(); return render(view); }
     renderSet(l, rename);
@@ -46,6 +69,39 @@ export function render(v = view, { rename = false } = {}) {
     renderPeer(p, lib);
   } else renderSongs(b.songs);
 }
+
+/** Session tab icon: your session's avatars when one is running. */
+function drawSessionTab() {
+  const people = session.active() ? session.peers().filter((p) => p.online || p.host) : [];
+  $('tab-ses').innerHTML = people.length
+    ? `<span class="av-stack">${people.slice(0, 3).map((p) => avatar(p, 'xs')).join('')}</span>`
+    : `<svg class="ti" aria-hidden="true"><use href="#i-session"/></svg>`;
+}
+
+/** Setlists tab (phones): yours, then everyone's in the session. */
+function renderSets() {
+  const mine = bandApi.band().setlists;
+  const row = (href, name, meta, extra = '') => `<a class="row list-row" href="#${href}" data-href="${href}">
+      <span class="cell"><span class="t">${esc(name)}</span><span class="s">${meta}</span></span>${extra}<span class="chev">${icon('chev-right')}</span></a>`;
+  const n = (k) => `${k} song${k === 1 ? '' : 's'}`;
+  $('lib-main').innerHTML = `<div class="page tab-page">
+    <div class="page-head"><div class="title"><h1>Setlists</h1></div>
+      <div class="actions"><button class="btn icon ghost" data-new-set aria-label="New setlist" title="New setlist">${icon('plus')}</button></div></div>
+    ${mine.length ? `<div class="list">${mine.map((l) => row(`set=${l.id}`, l.name, n(l.songIds.length))).join('')}</div>`
+      : `<div class="empty"><h2>No setlists yet</h2><p>Make one for your next rehearsal or gig, then add songs in the order you'll play them.</p></div>`}
+    ${session.sharing().map((p) => {
+      const lib = session.library(p.peer);
+      return `<div class="list-head">${avatar(p, 'sm')}<span>${esc(possessive(p.name))} library</span></div>
+        <div class="list">${row(`peer=${p.peer}`, 'Songs', n(lib.songs.length))}${lib.setlists.map((l) => {
+          const id = `${p.peer}~${l.id}`;
+          return row(`set=${id}`, l.name, n(l.songIds.length), bandApi.copyIsCurrent(bandApi.setlist(id)) ? `<span class="added">${icon('check')}Saved</span>` : '');
+        }).join('')}</div>`;
+    }).join('')}
+  </div>`;
+}
+
+/** Phones: a back link above a setlist or someone's library. */
+const backLink = () => `<a class="page-back" href="#tab=sets">${icon('chev-left')}Setlists</a>`;
 
 /** A setlist or library that went away (deleted, or its owner left the session): drop it from the address bar. */
 const clearHash = () => { if (location.hash) history.replaceState(null, '', location.pathname + location.search); };
@@ -71,7 +127,7 @@ function drawPeerNav() {
 function renderPeer(p, lib) {
   const rows = lib.songs.map(songRowData).sort((a, b) => a.title.localeCompare(b.title));
   const missing = rows.filter((r) => !bandApi.hasSong(r.songId)).length;
-  $('lib-main').innerHTML = `<div class="page">
+  $('lib-main').innerHTML = `<div class="page">${backLink()}
     <div class="page-head">
       <div class="title">${avatar(p, 'head')}<h1>${esc(possessive(p.name))} songs</h1><span class="meta">${rows.length} song${rows.length === 1 ? '' : 's'}</span></div>
       <div class="actions">${rows.length ? (missing
@@ -100,7 +156,7 @@ function renderRemoteSet(l) {
   const save = !copy ? `<button class="btn primary" data-save-set>${icon('save')}Save to my library</button>`
     : current ? `<a class="btn ghost saved-link" href="#set=${copy.id}" title="Open your copy">${icon('check')}Saved</a>`
     : `<button class="btn primary" data-save-set title="Your copy differs from ${esc(p?.name ?? 'theirs')}">${icon('sync')}Update my copy</button>`;
-  $('lib-main').innerHTML = `<div class="page">
+  $('lib-main').innerHTML = `<div class="page">${backLink()}
     <div class="page-head">
       <div class="title">${avatar(p, 'head')}<h1>${esc(l.name)}</h1><span class="meta">${p ? `From ${esc(p.name)} · ` : ''}${rows.length} song${rows.length === 1 ? '' : 's'}</span></div>
       <div class="actions">
@@ -160,7 +216,7 @@ function renderSongs(songs) {
 function renderSet(l, rename) {
   if (l.remote) return renderRemoteSet(l);
   const rows = l.songIds.map((id) => bandApi.songMeta(id)).filter(Boolean).map(songRowData);
-  $('lib-main').innerHTML = `<div class="page">
+  $('lib-main').innerHTML = `<div class="page">${backLink()}
     <div class="page-head">
       <div class="title">${rename ? `<input class="title-input" id="set-name" value="${esc(l.name)}" aria-label="Setlist name">` : `<h1>${esc(l.name)}</h1>`}
       <span class="meta">${rows.length} song${rows.length === 1 ? '' : 's'}</span></div>
@@ -203,6 +259,7 @@ async function onMainClick(e) {
     return render(view);
   }
   if (t.closest('[data-focus-search]')) return $('q').focus();
+  if (t.closest('[data-new-set]')) { const id = bandApi.createSetlist('Untitled setlist'); native.haptic(); return go(`set=${id}`, { rename: true }); }
 
   const menuBtn = t.closest('[data-song-menu]');
   if (menuBtn) { e.preventDefault(); return songMenu(menuBtn, Number(menuBtn.dataset.songMenu)); }
@@ -211,6 +268,7 @@ async function onMainClick(e) {
     const l = bandApi.setlist(view.id);
     const had = !!bandApi.savedCopy(l);
     const r = bandApi.saveSetlist(l);
+    native.haptic();
     toast(had ? `Updated your copy of ${l.name}` : `Saved ${l.name}${r.added ? ` · ${r.added} new song${r.added === 1 ? '' : 's'}` : ''}`);
     return;
   }
@@ -222,7 +280,7 @@ async function onMainClick(e) {
   const addSong = t.closest('[data-add-song]');
   if (addSong) {
     const s = bandApi.songMeta(Number(addSong.dataset.addSong));
-    if (s) { bandApi.addSong(s); toast(`Added ${s.title}`); }
+    if (s) { bandApi.addSong(s); native.haptic(); toast(`Added ${s.title}`); }
     return;
   }
 

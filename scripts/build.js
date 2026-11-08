@@ -40,9 +40,16 @@ export function build({ quiet = false } = {}) {
     .replace('href="styles.css"', `href="styles.css?v=${v}"`)
     .replace('src="js/main.js"', `src="js/main.js?v=${v}"`)
     .replace('src="vendor/qrcode.js"', `src="vendor/qrcode.js?v=${v}"`)
+    .replace('src="alphatab/alphaTab.min.js"', `src="alphatab/alphaTab.min.js?v=${v}"`)
     .replace('<meta name="tm-api"', `<meta name="tm-soundfont" content="soundfont/${path.basename(sf)}">\n<meta name="tm-api"`);
   if (process.env.TM_API) html = html.replace(/(<meta name="tm-api" content=")[^"]*/, `$1${process.env.TM_API}`);
   fs.writeFileSync(path.join(OUT, 'index.html'), html);
+
+  // Service worker: precache the app shell at exactly the URLs the page requests.
+  const shell = ['./', `styles.css?v=${v}`, `vendor/qrcode.js?v=${v}`, `alphatab/alphaTab.min.js?v=${v}`, 'manifest.webmanifest', 'icon.svg', 'apple-touch-icon.png',
+    ...fs.readdirSync(path.join(OUT, 'js')).map((f) => (f === 'main.js' ? `js/main.js?v=${v}` : `js/${f}?v=${v}`))];
+  const sw = fs.readFileSync(path.join(OUT, 'sw.js'), 'utf8').replace('__VERSION__', v).replace('__SHELL__', JSON.stringify(shell));
+  fs.writeFileSync(path.join(OUT, 'sw.js'), sw);
   fs.writeFileSync(path.join(OUT, '.nojekyll'), '');
   if (!quiet) console.log(`Built dist/ (v=${v}, soundfont: ${path.basename(sf)})`);
   return v;

@@ -4,6 +4,7 @@ import * as bandApi from './lib.js';
 import * as songs from './songs.js';
 import * as session from './session.js';
 import * as sessionUi from './sessionui.js';
+import * as native from './native.js';
 import * as player from './player.js';
 import * as practice from './practice.js';
 import * as library from './library.js';
@@ -35,17 +36,31 @@ function route() {
   const opts = pendingOpts; pendingOpts = {};
   closePopover();
   if (h.get('join')) { joinSession(h.get('join')); return; }
-  if (h.get('song')) {
-    document.body.dataset.screen = 'song';
-    openSong(Number(h.get('song')), h.get('set'));
-  } else {
-    leaveSong();
-    document.body.dataset.screen = 'library';
-    document.title = 'TabMonkey';
-    session.setStatus(null);
-    library.render(h.get('set') ? { kind: 'set', id: h.get('set') } : h.get('peer') ? { kind: 'peer', peer: h.get('peer') } : { kind: 'songs' }, opts);
-  }
+  const view = h.get('set') ? { kind: 'set', id: h.get('set') } : h.get('peer') ? { kind: 'peer', peer: h.get('peer') }
+    : { kind: ['sets', 'session', 'me'].includes(h.get('tab')) ? h.get('tab') : 'songs' };
+  // Phones and tablets: songs push in from the right and pop back out, like a native navigation stack.
+  const depth = h.get('song') ? 2 : view.kind === 'set' || view.kind === 'peer' ? 1 : 0;
+  native.transition(depth, () => {
+    if (h.get('song')) {
+      document.body.dataset.screen = 'song';
+      openSong(Number(h.get('song')), h.get('set'));
+    } else {
+      leaveSong();
+      document.body.dataset.screen = 'library';
+      document.title = 'TabMonkey';
+      session.setStatus(null);
+      library.render(view, opts);
+    }
+  });
 }
+
+// Swipe in from the left edge to go back (touch screens).
+native.enableSwipeBack(() => {
+  if (document.body.dataset.screen === 'song') return () => $('back').click();
+  const h = new URLSearchParams(location.hash.slice(1));
+  if (h.get('set') || h.get('peer')) return () => navigate(native.phone() ? 'tab=sets' : '');
+  return null;
+});
 
 // Opening an invite link (…#join=<id>): join, then land on the host's library once it arrives.
 async function joinSession(id) {
@@ -75,6 +90,11 @@ function drawWho() {
 
 function whoDialog({ name = '', instrument = 'guitar', required = false } = {}) {
   let inst = instrument;
+  // First launch: a welcome screen rather than a bare form.
+  const first = required && !store.profileNames().length;
+  $('who-welcome').hidden = !first;
+  $('who-title').hidden = first;
+  $('who').classList.toggle('first-run', first);
   $('who-name').value = name;
   const drawInst = () => {
     $('who-inst').innerHTML = INSTRUMENTS.map((i) => `<button type="button" role="radio" aria-checked="${i.id === inst}" data-i="${i.id}">${i.label}</button>`).join('');
@@ -123,6 +143,45 @@ $('who-btn').onclick = () => {
     },
   });
 };
+
+// ---------- You (the iPhone tab): players on this device, backup, install
+function mePage() {
+  const p = store.profile();
+  const inst = (n) => INSTRUMENTS.find((i) => i.id === store.profileInstrument(n))?.label ?? '';
+  return `<div class="page-head"><div class="title"><h1>You</h1></div></div>
+    <div class="list-head"><span>Players on this device</span></div>
+    <div class="list">
+      ${store.profileNames().map((n) => `<button class="row list-row" data-me-player="${esc(n)}">
+        <span class="cell"><span class="t">${esc(n)}</span><span class="s">${inst(n)}</span></span>
+        ${n === p?.name ? `<span class="added">${icon('check')}Playing</span>` : '<span></span>'}</button>`).join('')}
+      <button class="row list-row" data-me="edit"><span class="cell"><span class="t">Edit ${esc(p?.name ?? 'player')}</span><span class="s">Name and instrument</span></span><span class="chev">${icon('chev-right')}</span></button>
+      <button class="row list-row" data-me="new"><span class="cell"><span class="t">Add a player</span><span class="s">For a shared iPad</span></span><span class="chev">${icon('plus')}</span></button>
+    </div>
+    ${native.canInstall() ? `<div class="list-head"><span>Install</span></div>
+    <div class="install">
+      <img src="apple-touch-icon.png" alt="" width="44" height="44">
+      <div><strong>Add to Home Screen</strong>
+      <p>In Safari, tap ${icon('ios-share')} Share, then Add to Home Screen. TabMonkey opens full screen and works offline.</p></div>
+    </div>` : ''}
+    <div class="list-head"><span>Your library lives on this device</span></div>
+    <div class="list">
+      <button class="row list-row" data-me="backup"><span class="cell"><span class="t">Back up library and progress</span><span class="s">Saves a file you can restore anywhere</span></span><span class="chev">${icon('save')}</span></button>
+      <button class="row list-row" data-me="restore"><span class="cell"><span class="t">Restore from a backup</span><span class="s">Adds what's in the file to this device</span></span><span class="chev">${icon('chev-right')}</span></button>
+    </div>
+    <p class="fine-print">TabMonkey · Monkey see, monkey play.<br>Tab data from Songsterr.</p>`;
+}
+document.addEventListener('click', (e) => {
+  const pl = e.target.closest('[data-me-player]');
+  const a = e.target.closest('[data-me]')?.dataset.me;
+  if (!pl && !a) return;
+  native.haptic();
+  if (pl) { store.setProfile(pl.dataset.mePlayer); afterWho(); return; }
+  const p = store.profile();
+  if (a === 'edit') whoDialog({ name: p?.name, instrument: p?.instrument });
+  if (a === 'new') whoDialog({});
+  if (a === 'backup') backup();
+  if (a === 'restore') $('import-file').click();
+});
 
 // ---------- backup / restore: one JSON file with your library and every player's progress on this device
 function backup() {
@@ -301,7 +360,7 @@ function createApi() {
   api.playerPositionChanged.on(onPosition);
   api.playbackRangeChanged.on((e) => onRange(e.playbackRange));
   api.playerFinished.on(onFinished);
-  player.enableTouchSelect($('sheet'), () => {});
+  player.enableTouchSelect($('sheet'), () => native.haptic());
 }
 
 // Touch screens: say once how to loop a passage, since there's no mouse to drag with.
@@ -480,7 +539,7 @@ function applyToggles() {
 const toggleCount = () => { store.setPref('countIn', !store.pref('countIn', true)); applyToggles(); };
 const toggleClick = () => { store.setPref('metronome', !store.pref('metronome', false)); applyToggles(); };
 
-function playPause() { if (api && !$('t-play').disabled) api.playPause(); }
+function playPause() { if (api && !$('t-play').disabled) { native.haptic(); api.playPause(); } }
 $('t-play').onclick = playPause;
 $('t-start').onclick = () => {
   if (app.spot) return player.seekBar(app.spot.start);
@@ -490,7 +549,7 @@ $('t-start').onclick = () => {
 $('sp-down').onclick = () => setSpeed(app.speed - 0.05);
 $('sp-up').onclick = () => setSpeed(app.speed + 0.05);
 $('sp-val').onclick = () => setSpeed(1);
-$('t-loop').onclick = () => (app.spot ? closeSpot() : loopSection(Math.max(0, app.currentSection)));
+$('t-loop').onclick = () => { native.haptic(); return app.spot ? closeSpot() : loopSection(Math.max(0, app.currentSection)); };
 $('t-count').onclick = toggleCount;
 $('t-click').onclick = toggleClick;
 
@@ -897,9 +956,10 @@ await store.init();
 await loadThemeFonts(themeName());
 applySheet();
 drawWho();
-library.init({ navigate });
+library.init({ navigate, sessionPage: sessionUi.pageHtml, mePage });
 sessionUi.init({ navigate });
 session.boot();
+native.registerOffline();
 addEventListener('hashchange', route);
 route();
 if (!store.profile()) whoDialog({ required: true });

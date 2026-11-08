@@ -645,3 +645,124 @@ body[data-screen="library"] .toast { bottom: calc(24px + env(safe-area-inset-bot
   .btn.play { width: 44px; height: 44px; }
   .practice { min-height: 44px; padding-top: 4px; padding-bottom: 4px; }
 }
+
+/* ================= App feel on phones and tablets =================
+   Native behaviour (tab bar, push/pop, swipe back, sheets, haptics) in the app's own visual language:
+   Inter, hairlines, neutral chrome, orange only for playback. Touch screens (html.touch) and phone widths only. */
+.tabbar, .page-back { display: none; }
+.welcome { display: none; }
+
+/* Press feedback: rows darken, controls dim, nothing jumps */
+.touch .row:active, .touch .list-row:active, .touch .row.pressed { background: var(--press); }
+.touch .btn:active, .touch .song-id:active, .touch .part:active { opacity: .6; }
+.touch .btn.primary:active { opacity: .75; }
+.touch .tabbar a:active { opacity: .5; }
+
+/* Push / pop between screens (view transitions) */
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: .34s; animation-timing-function: cubic-bezier(.22, .8, .24, 1); }
+html[data-nav="push"]::view-transition-old(root) { animation-name: vt-push-out; }
+html[data-nav="push"]::view-transition-new(root) { animation-name: vt-push-in; }
+html[data-nav="pop"]::view-transition-old(root) { animation-name: vt-pop-out; z-index: 2; }
+html[data-nav="pop"]::view-transition-new(root) { animation-name: vt-pop-in; }
+@keyframes vt-push-in { from { transform: translateX(100%); box-shadow: -1px 0 0 var(--line-strong); } to { box-shadow: -1px 0 0 var(--line-strong); } }
+@keyframes vt-push-out { to { transform: translateX(-25%); opacity: .7; } }
+@keyframes vt-pop-out { from { box-shadow: -1px 0 0 var(--line-strong); } to { transform: translateX(100%); box-shadow: -1px 0 0 var(--line-strong); } }
+@keyframes vt-pop-in { from { transform: translateX(-25%); opacity: .7; } }
+.tabbar { view-transition-name: tabbar; }
+
+/* Swipe back: the screen follows your finger, the library underneath */
+.swipe-shade { position: fixed; inset: 0; z-index: 4; background: #000; opacity: .35; pointer-events: none; }
+body[data-peek] #library { display: grid; position: fixed; inset: 0; z-index: 0; }
+body[data-peek] #song { position: fixed; inset: 0; z-index: 5; box-shadow: -1px 0 0 var(--line-strong); }
+html[data-swiping] #lib-main { position: relative; z-index: 5; box-shadow: -1px 0 0 var(--line-strong); }
+
+.av.xs { --size: 20px; font-size: 8px; box-shadow: 0 0 0 1.5px var(--chrome), 0 0 0 3px var(--c); }
+.tabbar .av-stack .av + .av { margin-left: -6px; }
+
+/* ---------- iPhone */
+@media (max-width: 600px) {
+  .side { display: none; }
+  #library { grid-template-rows: auto minmax(0, 1fr); }
+  .lib { grid-template-rows: minmax(0, 1fr); }
+  #library .session-btn, #library .who { display: none; }
+  /* Only Songs has the logo + search header; the other tabs open on their title */
+  body:not([data-tab="songs"]) #library > .bar { display: none; }
+  body:not([data-tab="songs"]) #library { grid-template-rows: minmax(0, 1fr); }
+  body:not([data-tab="songs"]) .page { padding-top: calc(16px + env(safe-area-inset-top)); }
+
+  /* Tab bar: a floating glass capsule over the content, solid glyphs, the current tab in a soft pill */
+  .tabbar { position: fixed; left: 50%; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: var(--z-chrome); transform: translateX(-50%);
+    width: min(calc(100% - 28px), 420px); height: 64px; padding: 5px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px;
+    border-radius: 32px; background: var(--chrome);
+    box-shadow: 0 0 0 .5px color-mix(in srgb, var(--text) 14%, transparent), 0 10px 30px -6px rgb(0 0 0 / .22), 0 2px 6px rgb(0 0 0 / .06),
+      inset 0 .5px 0 rgb(255 255 255 / .35); }
+  @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+    .tabbar { background: color-mix(in srgb, var(--chrome) 66%, transparent); -webkit-backdrop-filter: blur(26px) saturate(190%); backdrop-filter: blur(26px) saturate(190%); }
+  }
+  @media (prefers-color-scheme: dark) { .tabbar { box-shadow: 0 0 0 .5px rgb(255 255 255 / .1), 0 12px 32px -6px rgb(0 0 0 / .6), inset 0 .5px 0 rgb(255 255 255 / .08); } }
+  body:not([data-screen="library"]) .tabbar { display: none; }
+  .tabbar a { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border-radius: 27px;
+    color: color-mix(in srgb, var(--text) 52%, transparent); text-decoration: none; font-size: 10px; line-height: 12px; font-weight: 600; letter-spacing: .01em;
+    -webkit-tap-highlight-color: transparent; transition: color .2s, background-color .25s cubic-bezier(.2, .8, .2, 1), transform .2s; }
+  .tabbar a[aria-current] { color: var(--text); background: color-mix(in srgb, var(--text) 9%, transparent); }
+  .touch .tabbar a:active { opacity: 1; transform: scale(.94); }
+  .ti, .tab-ses { width: 24px; height: 24px; display: grid; place-items: center; }
+  .tab-ses .ti { width: 24px; height: 24px; }
+  .tabbar .av.xs { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--chrome) 80%, transparent), 0 0 0 3px var(--c); }
+
+  .page { padding: 12px 16px calc(104px + env(safe-area-inset-bottom)); }
+  .page-head { margin-bottom: 12px; }
+  .page-head h1 { font-size: 24px; line-height: 30px; }
+  .page-head .actions .btn.icon { width: 40px; height: 40px; }
+  .tab-page .page-head { flex-wrap: nowrap; height: 40px; align-items: center; }
+  .tab-page .page-head .title { align-items: center; }
+  .table.songs { --cols: minmax(0, 1fr) auto 36px; }
+  .table.set { --cols: 20px minmax(0, 1fr) auto 36px; }
+  .tab-page .page-head .actions { width: auto; margin-left: auto; }
+  .table .row.head { display: none; }
+  .table { border-top: 0; }
+  .row .btn.icon.ghost { color: var(--text-3); }
+  .page-back { display: inline-flex; align-items: center; gap: 2px; height: 32px; margin: 0 0 4px -4px; color: var(--text-2); font-size: 15px; text-decoration: none; }
+  .page-back .i { width: 18px; height: 18px; }
+
+  /* Lists: hairline rows, as on desktop */
+  .progress + .faint, .cell .faint:only-child { display: none; }
+  .list { border-top: 1px solid var(--line); }
+  .list-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 60px; padding: 8px 4px; border: 0; border-bottom: 1px solid var(--line);
+    background: none; text-align: left; color: inherit; text-decoration: none; font: inherit; cursor: pointer; }
+  .list-row .cell { flex: 1; min-width: 0; }
+  .list-row .added { margin-left: auto; padding-right: 0; }
+  .chev { color: var(--text-3); display: flex; }
+  .chev .i { width: 16px; height: 16px; }
+  .list-head { display: flex; align-items: center; gap: 10px; height: 32px; margin: 24px 0 4px; color: var(--text-3); font-size: 12px; font-weight: 500; }
+  .list-head .av { margin-left: 4px; }
+  .tab-page .empty { padding: 20px 0; }
+
+  .install { display: flex; gap: 14px; align-items: center; padding: 14px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .install img { border-radius: 10px; flex: none; }
+  .install strong { font-weight: 600; }
+  .install p { margin-top: 2px; color: var(--text-2); font-size: 13px; line-height: 19px; }
+  .install p .i { display: inline-block; width: 15px; height: 15px; vertical-align: -3px; }
+  .fine-print { margin: 40px 0 0; text-align: center; color: var(--text-3); font-size: 12px; line-height: 18px; }
+  .ses-page .ses { padding: 0; }
+  .ses-page .ses-start { padding: 32px 4px 8px; }
+  .ses-page .ses-invite { background: none; padding: 4px 0 16px; border-bottom: 1px solid var(--line); border-radius: 0; }
+  .ses-page .ses-head { padding: 0 0 16px; }
+  .ses-page .ses-head h3 { font-size: 24px; line-height: 30px; letter-spacing: -0.02em; }
+
+  body[data-screen="library"] .toast { bottom: calc(86px + env(safe-area-inset-bottom)); }
+
+  /* "Who's playing?" as a bottom sheet */
+  .dialog { width: 100%; max-width: none; margin: auto 0 0; border-radius: 14px 14px 0 0; border-width: 1px 0 0; padding: 24px 20px calc(20px + env(safe-area-inset-bottom)); }
+  .dialog .seg { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; }
+  .dialog .seg button { min-height: 40px; }
+  .dialog .actions .btn { width: 100%; height: 46px; font-size: 15px; }
+  .dialog.first-run[open] { margin: 0; height: 100%; max-height: 100%; border: 0; border-radius: 0; display: flex; flex-direction: column; justify-content: center;
+    padding-top: calc(24px + env(safe-area-inset-top)); }
+}
+/* First launch: a quiet welcome above the form */
+.dialog.first-run .welcome { display: block; margin: 0 0 28px; }
+.welcome img { display: block; border-radius: 12px; }
+.welcome h1 { margin-top: 20px; font-size: 22px; line-height: 28px; font-weight: 600; letter-spacing: -0.02em; }
+.welcome p { margin-top: 6px; color: var(--text-2); font-size: 15px; line-height: 22px; }
+.dialog.first-run > form > .meta { display: none; }
