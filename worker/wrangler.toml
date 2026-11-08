@@ -3,6 +3,7 @@ main = "src/index.js"
 compatibility_date = "2025-10-01"
 
 [vars]
+# Deployed at https://tabmonkey.tabmonkey-worker.workers.dev
 # Where the static app lives (GitHub Pages). Invite links send people here.
 APP_URL = "https://elijahderyaw.github.io/tabmonkey/"
 # Sites allowed to use the API and sessions (localhost is always allowed for development).

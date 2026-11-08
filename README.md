@@ -93,7 +93,7 @@ node scripts/og/render.js   # re-render the link preview images and home screen 
 ### Deploy
 
 ```sh
-cd worker && npx wrangler login && npx wrangler deploy   # prints https://tabmonkey.<you>.workers.dev
+cd worker && npx wrangler login && npx wrangler deploy   # prints the Worker URL (currently https://tabmonkey.tabmonkey-worker.workers.dev)
 ```
 
 Put that URL in `<meta name="tm-api">` in `public/index.html`, and push to `main`. If the site moves, update `APP_URL` and `ALLOWED_ORIGINS` in `worker/wrangler.toml`.
