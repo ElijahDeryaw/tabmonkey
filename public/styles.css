@@ -691,8 +691,8 @@ html[data-swiping] #lib-main { position: relative; z-index: 5; box-shadow: -1px 
   body:not([data-tab="songs"]) .page { padding-top: calc(16px + env(safe-area-inset-top)); }
 
   /* Tab bar: a floating glass capsule over the content, solid glyphs, the current tab in a soft pill */
-  .tabbar { position: fixed; left: 50%; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: var(--z-chrome); transform: translateX(-50%);
-    width: min(calc(100% - 28px), 420px); height: 64px; padding: 5px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px;
+  .tabbar { position: fixed; left: 50%; bottom: var(--float-bottom); z-index: var(--z-chrome); transform: translateX(-50%);
+    width: min(calc(100% - 2 * var(--float-side)), 420px); height: 64px; padding: 5px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px;
     border-radius: 32px; background: var(--chrome);
     box-shadow: 0 0 0 .5px color-mix(in srgb, var(--text) 14%, transparent), 0 10px 30px -6px rgb(0 0 0 / .22), 0 2px 6px rgb(0 0 0 / .06),
       inset 0 .5px 0 rgb(255 255 255 / .35); }
@@ -710,7 +710,7 @@ html[data-swiping] #lib-main { position: relative; z-index: 5; box-shadow: -1px 
   .tab-ses .ti { width: 24px; height: 24px; }
   .tabbar .av.xs { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--chrome) 80%, transparent), 0 0 0 3px var(--c); }
 
-  .page { padding: 12px 16px calc(104px + env(safe-area-inset-bottom)); }
+  .page { padding: 12px 16px calc(var(--float-bottom) + 92px); }
   .page-head { margin-bottom: 12px; }
   .page-head h1 { font-size: 24px; line-height: 30px; }
   .page-head .actions .btn.icon { width: 40px; height: 40px; }
@@ -750,7 +750,7 @@ html[data-swiping] #lib-main { position: relative; z-index: 5; box-shadow: -1px 
   .ses-page .ses-head { padding: 0 0 16px; }
   .ses-page .ses-head h3 { font-size: 24px; line-height: 30px; letter-spacing: -0.02em; }
 
-  body[data-screen="library"] .toast { bottom: calc(86px + env(safe-area-inset-bottom)); }
+  body[data-screen="library"] .toast { bottom: calc(var(--float-bottom) + 76px); }
 
   /* "Who's playing?" as a bottom sheet */
   .dialog { width: 100%; max-width: none; margin: auto 0 0; border-radius: 14px 14px 0 0; border-width: 1px 0 0; padding: 24px 20px calc(20px + env(safe-area-inset-bottom)); }
@@ -766,3 +766,102 @@ html[data-swiping] #lib-main { position: relative; z-index: 5; box-shadow: -1px 
 .welcome h1 { margin-top: 20px; font-size: 22px; line-height: 28px; font-weight: 600; letter-spacing: -0.02em; }
 .welcome p { margin-top: 6px; color: var(--text-2); font-size: 15px; line-height: 22px; }
 .dialog.first-run > form > .meta { display: none; }
+
+/* ================= Polish: one surface language everywhere =================
+   Frosted "glass" for anything that floats (tab bar, transport, menus, sheets, toasts), soft pills for chips and
+   primary actions, gentle depth. Phones and tablets get all of it; desktop only the quiet parts. */
+:root {
+  --glass: color-mix(in srgb, var(--chrome) 72%, transparent);
+  --glass-solid: var(--chrome);
+  --glass-edge: 0 0 0 .5px color-mix(in srgb, var(--text) 13%, transparent);
+  --glass-lift: 0 12px 34px -8px rgb(0 0 0 / .24), 0 2px 8px rgb(0 0 0 / .06);
+  --glass-shine: inset 0 .5px 0 rgb(255 255 255 / .4);
+  --soft: color-mix(in srgb, var(--text) 7%, transparent);      /* quiet fill for round buttons and pills */
+  --soft-press: color-mix(in srgb, var(--text) 13%, transparent);
+  /* Floating bars and sheets sit clear of the screen's rounded corners and the home indicator */
+  --float-side: 20px;
+  --float-bottom: max(18px, calc(env(safe-area-inset-bottom) - 4px));
+  --sheet-side: 10px;
+  --sheet-bottom: max(10px, calc(env(safe-area-inset-bottom) - 12px));
+}
+@media (prefers-color-scheme: dark) {
+  :root { --glass-edge: 0 0 0 .5px rgb(255 255 255 / .1); --glass-lift: 0 14px 38px -8px rgb(0 0 0 / .65); --glass-shine: inset 0 .5px 0 rgb(255 255 255 / .07); }
+}
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .menu, .toast, .touch .transport, .touch .practice {
+    -webkit-backdrop-filter: blur(28px) saturate(180%); backdrop-filter: blur(28px) saturate(180%); }
+  .menu { background: color-mix(in srgb, var(--chrome) 86%, transparent); }
+}
+
+/* ---------- Desktop and everywhere: quieter, softer */
+.menu { border-radius: 12px; border: 0; box-shadow: var(--glass-edge), var(--glass-lift), var(--glass-shine); padding: 5px; }
+.menu-item { border-radius: 7px; }
+.menu-sep { margin: 5px 4px; }
+.toast { border-radius: 999px; padding: 10px 18px; box-shadow: 0 10px 30px -8px rgb(0 0 0 / .35); }
+.transport .btn.icon:not(.play) { border-color: transparent; background: none; color: var(--text-2); border-radius: 999px; }
+.transport .btn.icon:not(.play):hover { background: var(--soft); color: var(--text); }
+.ses-invite { border-radius: 14px; }
+.qr { border-radius: 10px; }
+.sf { border-radius: 999px; padding: 5px 12px; box-shadow: var(--glass-edge); border: 0; }
+.dialog { border-radius: 16px; border: 0; box-shadow: var(--glass-edge), var(--glass-lift); }
+
+/* ---------- Phones and tablets */
+/* Buttons are pills; icon buttons are soft circles */
+
+/* Song screen: the music runs under floating controls */
+.touch #song { position: relative; grid-template-rows: auto auto minmax(0, 1fr); }
+.touch .viewport { padding-bottom: calc(var(--float-bottom) + 84px); }
+.touch #song:has(.practice:not([hidden])) .viewport { padding-bottom: calc(var(--float-bottom) + 160px); }
+.touch .transport { position: absolute; z-index: var(--z-chrome); left: 50%; transform: translateX(-50%); bottom: var(--float-bottom);
+  width: min(calc(100% - 2 * var(--float-side)), 1100px); height: 64px; padding: 0 8px; box-sizing: border-box; border: 0; border-radius: 32px;
+  background: var(--glass-solid); box-shadow: var(--glass-edge), var(--glass-lift), var(--glass-shine); }
+.touch .practice { position: absolute; z-index: var(--z-chrome); left: 50%; transform: translateX(-50%); bottom: calc(var(--float-bottom) + 72px);
+  width: min(calc(100% - 2 * var(--float-side)), 1100px); min-height: 52px; padding: 8px 10px 8px 18px; border: 0; border-radius: 22px;
+  background: var(--glass-solid); box-shadow: var(--glass-edge), var(--glass-lift), var(--glass-shine); animation: rise .28s cubic-bezier(.2, .8, .2, 1); }
+@keyframes rise { from { transform: translate(-50%, 12px); opacity: 0; } }
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .touch .transport, .touch .practice { background: var(--glass); }
+}
+.touch .btn.play { width: 48px; height: 48px; box-shadow: 0 4px 12px -2px rgb(0 0 0 / .3); }
+.touch .t-play { gap: 6px; }
+.touch .sf { bottom: calc(100% + 8px); margin: 0; background: var(--glass-solid); }
+.touch .loading { background: var(--canvas); }
+
+/* Song bar: soft round buttons, your part and the setlist as pills */
+.touch .map { border-bottom: 0; box-shadow: inset 0 -1px 0 var(--line); }
+
+/* Sheets float inset with big corners, like current iOS */
+.menu.bottom-sheet { left: var(--sheet-side); right: var(--sheet-side); bottom: var(--sheet-bottom); width: auto; border-radius: 34px; border: 0;
+  padding: 20px 10px 12px; box-shadow: var(--glass-edge), 0 20px 60px -10px rgb(0 0 0 / .45), var(--glass-shine);
+  transform: translateY(calc(100% + 24px)); }
+.menu.bottom-sheet.in { transform: none; }
+.menu.bottom-sheet .menu-item { border-radius: 14px; }
+.menu-backdrop.in { background: rgb(0 0 0 / .32); }
+@media (max-width: 600px) {
+  .dialog:not(.first-run) { margin: auto var(--sheet-side) var(--sheet-bottom); width: auto; border-radius: 34px; }
+  .switcher, .menu.results { border-radius: 18px; }
+  #library > .bar { border-bottom: 0; }
+  .touch .songbar { border-bottom: 0; }
+}
+.touch .toast { padding: 12px 20px; }
+.touch body[data-screen="song"] .toast { bottom: calc(var(--float-bottom) + 76px); }
+.touch #song:has(.practice:not([hidden])) ~ .toast { bottom: calc(var(--float-bottom) + 140px); }
+/* Dialog close button, and a grabber on phone sheets */
+.dialog form { position: relative; }
+.dialog-close { position: absolute; top: -10px; right: -10px; color: var(--text-3); }
+@media (max-width: 600px) {
+  .dialog:not(.first-run)::before { content: ""; position: absolute; top: 8px; left: 50%; width: 36px; height: 5px; margin-left: -18px; border-radius: 3px; background: var(--line-strong); }
+}
+/* Nothing pans sideways: the music and the lists only scroll up and down (pinch still resizes the sheet) */
+.viewport, .lib-main, .menu, .sw-list { overflow-x: hidden; overscroll-behavior-x: none; }
+.touch .viewport, .touch .lib-main { touch-action: pan-y pinch-zoom; }
+@media (max-width: 600px) {
+  .touch .practice { gap: 2px 14px; padding: 8px 8px 6px 16px; }
+  .touch .practice .pr-what { flex-basis: 100%; }
+}
+@media (max-height: 500px) and (pointer: coarse) {
+  .touch .transport { height: 54px; }
+  .touch .btn.play { width: 42px; height: 42px; }
+  .touch .practice { bottom: calc(var(--float-bottom) + 62px); min-height: 44px; }
+  .touch .viewport { padding-bottom: calc(var(--float-bottom) + 70px); }
+}

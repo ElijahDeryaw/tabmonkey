@@ -130,3 +130,46 @@ export function registerOffline() {
 
 // ---------- Add to Home Screen (iOS has no install prompt, so explain it)
 export const canInstall = () => ios && !standalone;
+
+// ---------- swipe a sheet down to dismiss it (sheets and phone dialogs)
+/** el: the sheet; close(): dismiss it; canClose(): false while it must stay (e.g. first-run welcome). */
+export function enableSwipeDismiss(el, close, canClose = () => true) {
+  if (!touch || el._swipeDismiss) return;
+  el._swipeDismiss = true;
+  let y0 = 0, x0 = 0, dy = 0, dragging = false, track = false, lastY = 0, lastT = 0, v = 0;
+  el.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1 || !canClose() || e.target.closest('input, select, textarea, input[type="range"]')) { track = false; return; }
+    const scroller = e.target.closest('.sw-list') || el;
+    track = scroller.scrollTop <= 0;
+    y0 = lastY = e.touches[0].clientY; x0 = e.touches[0].clientX; lastT = e.timeStamp; dy = 0; dragging = false; v = 0;
+  }, { passive: true });
+  el.addEventListener('touchmove', (e) => {
+    if (!track) return;
+    const t = e.touches[0], my = t.clientY - y0, mx = t.clientX - x0;
+    if (!dragging) {
+      if (my < 6 || Math.abs(mx) > Math.abs(my)) { if (my < -4 || Math.abs(mx) > 10) track = false; return; }
+      dragging = true;
+    }
+    e.preventDefault();
+    dy = Math.max(0, my);
+    v = (t.clientY - lastY) / Math.max(1, e.timeStamp - lastT); lastY = t.clientY; lastT = e.timeStamp;
+    el.style.transition = 'none';
+    el.style.transform = `translateY(${dy}px)`;
+  }, { passive: false });
+  const end = () => {
+    if (!dragging) return;
+    dragging = false; track = false;
+    const gone = dy > Math.min(140, el.offsetHeight * 0.3) || v > 0.6;
+    el.style.transition = 'transform .24s cubic-bezier(.2,.8,.2,1)';
+    if (gone) {
+      el.style.transform = `translateY(${el.offsetHeight + 40}px)`;
+      haptic();
+      setTimeout(() => { close(); el.style.transition = ''; el.style.transform = ''; }, 200);
+    } else {
+      el.style.transform = '';
+      setTimeout(() => { el.style.transition = ''; }, 260);
+    }
+  };
+  el.addEventListener('touchend', end);
+  el.addEventListener('touchcancel', end);
+}

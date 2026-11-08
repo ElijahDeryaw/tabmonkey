@@ -108,6 +108,16 @@ function whoDialog({ name = '', instrument = 'guitar', required = false } = {}) 
     afterWho();
   };
   $('who').oncancel = (e) => { if (required) e.preventDefault(); };
+  // Close with the X, a tap outside, or (on phones) a swipe down, unless a name is required.
+  $('who-close').hidden = required;
+  $('who-close').onclick = () => $('who').close();
+  $('who').onclick = (e) => {
+    if (required || e.target !== $('who')) return;
+    const r = $('who').getBoundingClientRect();
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) $('who').close();
+  };
+  $('who')._required = required;
+  native.enableSwipeDismiss($('who'), () => $('who').close(), () => !$('who')._required);
   $('who').showModal();
   $('who-name').focus();
 }
@@ -322,7 +332,7 @@ const theme = () => sheetTheme(themeName(), sheetDark());
 const effectiveScale = () => Math.round(zoomLevel() * theme().scaleFactor * 100) / 100;
 
 function createApi() {
-  api = player.create($('sheet'), $('viewport'), { scale: effectiveScale(), layout: store.device('layout', 'Page'), view: yourView() });
+  api = player.create($('sheet'), $('viewport'), { scale: effectiveScale(), layout: 'Page', view: yourView() }); // always pages: the sheet only ever scrolls up and down
   player.updateDisplay({ theme: theme().settings, scale: effectiveScale() });
   window.tabApi = api; // for debugging in the console
   api.scoreLoaded.on((score) => {
@@ -641,12 +651,11 @@ function changeParts() {
 const VIEWS = [['tab', 'Tab'], ['both', 'Tab + staff'], ['notation', 'Staff']];
 $('view-btn').onclick = () => {
   popover($('view-btn'), () => {
-    const v = yourView(), l = store.device('layout', 'Page'), dark = sheetDark();
+    const v = yourView(), dark = sheetDark();
     const seg = (name, items, cur) => `<div class="seg" role="radiogroup">${items.map(([k, label]) => `<button role="radio" data-${name}="${k}" aria-checked="${k === cur}">${label}</button>`).join('')}</div>`;
     return `
       <div class="menu-row"><span>Theme</span>${seg('theme', THEMES, themeName())}</div>
       <div class="menu-row"><span>Notation</span>${seg('view', VIEWS, v)}</div>
-      <div class="menu-row"><span>Layout</span>${seg('layout', [['Page', 'Page'], ['Horizontal', 'One line']], l)}</div>
       <div class="menu-row"><span>Size</span><div class="stepper">
         <button class="btn icon ghost" data-zoom="-0.1" aria-label="Smaller">${icon('minus')}</button>
         <span class="tempo" style="min-width:48px">${Math.round(zoomLevel() * 100)}%</span>
@@ -659,7 +668,6 @@ $('view-btn').onclick = () => {
     onClick: (e, m) => {
       const b = e.target.closest('button'); if (!b) return;
       if (b.dataset.view) { store.setPref(`view:${roleOfMain()}`, b.dataset.view); rerender(); }
-      if (b.dataset.layout) { store.setDevice('layout', b.dataset.layout); rerender(() => player.updateDisplay({ layout: b.dataset.layout })); }
       if (b.dataset.zoom) zoom(Number(b.dataset.zoom));
       if (b.dataset.sheet) { store.setDevice('sheet', b.dataset.sheet); applySheet(); }
       if (b.dataset.theme) { store.setDevice('theme', b.dataset.theme); applySheet(); }

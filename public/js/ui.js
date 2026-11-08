@@ -1,4 +1,5 @@
 // Small UI helpers shared by the library and song screens.
+import { enableSwipeDismiss } from './native.js';
 export const $ = (id) => document.getElementById(id);
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const icon = (name, cls = '') => `<svg class="i ${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
@@ -49,7 +50,10 @@ export function popover(anchor, render, { align = 'start', onClick, className = 
   anchor.setAttribute('aria-expanded', 'true');
   if (matchWidth) el.style.width = `${anchor.getBoundingClientRect().width}px`;
   place(current);
-  if (sheet) requestAnimationFrame(() => { el.classList.add('in'); backdrop.classList.add('in'); });
+  if (sheet) {
+    requestAnimationFrame(() => { el.classList.add('in'); backdrop.classList.add('in'); });
+    enableSwipeDismiss(el, () => { if (current?.el === el) closePopover(); });
+  }
   const redraw = () => { draw(); place(current); }; // content can grow; keep it on screen
   el.addEventListener('click', (e) => onClick?.(e, { redraw, close: closePopover }));
   el.addEventListener('input', (e) => onClick?.(e, { redraw, close: closePopover }));
