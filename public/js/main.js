@@ -564,6 +564,10 @@ function playPause() {
   startPlayback();
 }
 function startPlayback(retry = false) {
+  // Back from the background (or the audio isn't healthy): iOS can leave the old audio connection dead even though
+  // it says it resumed. Give alphaTab a brand-new one, created inside this tap so iOS lets it start.
+  const ctx0 = audioContext();
+  if (staleAudio || retry || (ctx0 && ctx0.state !== 'running')) freshAudio();
   wakeAudio();
   if (!api.isReadyForPlayback || !app.ready.midi) { wantPlay = true; drawPlayWaiting(); return; } // still loading this song
   wantPlay = false; drawPlayWaiting();
@@ -577,11 +581,25 @@ function startPlayback(retry = false) {
     const running = ctx ? ctx.state === 'running' && ctx.currentTime - t0 > 0.4 : lastTick !== from;
     if (running) return;
     api.pause();
+    staleAudio = true; // the next start (this retry, or your next tap) uses a fresh audio connection
     if (!retry) setTimeout(() => startPlayback(true), 150);
-    else toast('Sound didn’t start. Tap play again.');
+    else toast('Tap play to start the sound');
   }, 1100);
 }
 const audioContext = () => { try { return api?.player?.output?.context ?? null; } catch { return null; } };
+let staleAudio = false;
+/** Swap alphaTab's audio context for a new one (only while paused; playback builds its audio graph on play). */
+function freshAudio() {
+  staleAudio = false;
+  const out = api?.player?.output, old = out?.context;
+  if (!old) return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  let ctx;
+  try { ctx = new AC({ sampleRate: old.sampleRate }); } catch { try { ctx = new AC(); } catch { return; } }
+  if (ctx.sampleRate !== old.sampleRate) { ctx.close?.(); return; } // the synth is tuned to the old rate; keep it
+  out.context = ctx;
+  try { old.close(); } catch { /* already closed */ }
+}
 function wakeAudio() {
   try {
     const ctx = audioContext();
@@ -591,7 +609,12 @@ function wakeAudio() {
 }
 function drawPlayWaiting() { $('t-play').classList.toggle('waiting', wantPlay); }
 // Leaving the app pauses (iOS stops web audio in the background anyway), so the button never lies.
-document.addEventListener('visibilitychange', () => { if (document.hidden && api && app.playing) api.pause(); });
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) return;
+  if (api && app.playing) api.pause();
+  staleAudio = true; // iOS may kill the audio while we're away; start fresh on the next play
+});
+addEventListener('pagehide', () => { staleAudio = true; });
 $('t-play').onclick = playPause;
 $('t-start').onclick = () => {
   if (app.spot) return player.seekBar(app.spot.start);
